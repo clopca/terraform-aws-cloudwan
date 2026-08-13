@@ -5,6 +5,11 @@ variable "global_network_id" {
   type        = string
   description = "(Optional) Global Network ID. Conflicts with `var.global_network`."
   default     = null
+
+  validation {
+    condition     = var.global_network_id == null || can(regex("^global-network-[0-9a-f]{8,17}$", var.global_network_id))
+    error_message = "var.global_network_id must match global-network- followed by 8 to 17 lowercase hexadecimal characters."
+  }
 }
 
 variable "global_network" {
@@ -43,6 +48,11 @@ variable "core_network_arn" {
   type        = string
   description = "(Optional) Core Network ARN. Conflicts with `var.core_network`."
   default     = null
+
+  validation {
+    condition     = var.core_network_arn == null || can(regex("^arn:[^:]+:networkmanager::[0-9]{12}:core-network/core-network-[0-9a-f]{8,17}$", var.core_network_arn))
+    error_message = "var.core_network_arn must be a complete Network Manager Core Network ARN: arn:<partition>:networkmanager::<12-digit-account>:core-network/core-network-<8-to-17-hex>."
+  }
 }
 
 variable "core_network" {
@@ -99,6 +109,20 @@ EOF
       false
     )
     error_message = "A non-empty var.core_network must include string description and policy_document. Optional share fields and tags must use their documented types; base_policy_document and base_policy_regions are mutually exclusive."
+  }
+
+  validation {
+    condition = var.core_network == null || try(length(keys(var.core_network)) == 0, false) ? true : try(
+      can(jsondecode(var.core_network.policy_document)) &&
+      contains(keys(jsondecode(var.core_network.policy_document)), "version") &&
+      jsondecode(var.core_network.policy_document).version == tostring(jsondecode(var.core_network.policy_document).version) &&
+      contains(keys(jsondecode(var.core_network.policy_document)), "core-network-configuration") &&
+      can(keys(jsondecode(var.core_network.policy_document)["core-network-configuration"])) &&
+      contains(keys(jsondecode(var.core_network.policy_document)), "segments") &&
+      can(tolist(jsondecode(var.core_network.policy_document).segments)),
+      false
+    )
+    error_message = "var.core_network.policy_document must be valid JSON with string version, object core-network-configuration, and segments as a JSON list."
   }
 }
 
@@ -213,6 +237,13 @@ variable "ipv4_network_definition" {
   type        = string
   description = "Definition of the IPv4 CIDR blocks of the AWS network - needed for the VPC routes in Ingress and Egress VPC types. You can specify either a CIDR range or a Prefix List ID."
   default     = null
+
+  validation {
+    condition = var.ipv4_network_definition == null || (
+      can(cidrnetmask(var.ipv4_network_definition)) && can(regex("^[0-9]{1,3}\\.", var.ipv4_network_definition))
+    ) || can(regex("^pl-[0-9a-f]{8,17}$", var.ipv4_network_definition))
+    error_message = "var.ipv4_network_definition must be a valid IPv4 CIDR block or a managed prefix list ID matching pl-<8-to-17-hex>."
+  }
 }
 
 # ---------- AWS NETWORK FIREWALL ----------
