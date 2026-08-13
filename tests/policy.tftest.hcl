@@ -175,7 +175,44 @@ run "reject_approval_digest_kind" {
   expect_failures = [var.approval]
 }
 
-run "compound_timeout_1h30m" {
+run "policy_reject_invalid_core_network_id" {
+  command = plan
+  module { source = "./modules/policy-deployment" }
+  variables {
+    core_network_id = "core-network-not-hex"
+    policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
+  }
+  expect_failures = [var.core_network_id]
+}
+
+run "policy_timeout_default_30m" {
+  command = plan
+  module { source = "./modules/policy-deployment" }
+  variables {
+    core_network_id = "core-network-11111111111111111"
+    policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
+  }
+  assert {
+    condition     = aws_networkmanager_core_network_policy_attachment.this.timeouts.update == "30m"
+    error_message = "The policy resource must receive the documented 30m default update timeout."
+  }
+}
+
+run "policy_timeout_override_60m" {
+  command = plan
+  module { source = "./modules/policy-deployment" }
+  variables {
+    core_network_id = "core-network-11111111111111111"
+    policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
+    timeouts        = { update = "60m" }
+  }
+  assert {
+    condition     = aws_networkmanager_core_network_policy_attachment.this.timeouts.update == "60m"
+    error_message = "The policy resource must receive the recommended 60m update timeout override."
+  }
+}
+
+run "policy_timeout_compound_1h30m" {
   command = plan
   module { source = "./modules/policy-deployment" }
   variables {
@@ -183,6 +220,21 @@ run "compound_timeout_1h30m" {
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
     timeouts        = { update = "1h30m" }
   }
+  assert {
+    condition     = aws_networkmanager_core_network_policy_attachment.this.timeouts.update == "1h30m"
+    error_message = "The policy resource must preserve a valid compound timeout."
+  }
+}
+
+run "reject_negative_timeout" {
+  command = plan
+  module { source = "./modules/policy-deployment" }
+  variables {
+    core_network_id = "core-network-11111111111111111"
+    policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
+    timeouts        = { update = "-1s" }
+  }
+  expect_failures = [var.timeouts]
 }
 
 run "reject_zero_timeout" {

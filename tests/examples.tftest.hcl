@@ -58,6 +58,12 @@ mock_provider "aws" {
   mock_resource "aws_ram_resource_share" {
     defaults = { arn = "arn:aws:ram:us-east-1:123456789012:resource-share/11111111-1111-1111-1111-111111111111" }
   }
+  mock_resource "aws_ram_resource_association" {
+    defaults = { id = "resource-association-mock" }
+  }
+  mock_resource "aws_ram_principal_association" {
+    defaults = { id = "principal-association-mock" }
+  }
 }
 
 run "example_basic" {
@@ -78,4 +84,41 @@ run "example_core_network_share" {
 run "example_stack_compact" {
   command = plan
   module { source = "./examples/stack_compact" }
+}
+
+run "stack_without_sharing" {
+  command = plan
+  module { source = "./examples/stack_compact" }
+  variables {
+    sharing = null
+  }
+  assert {
+    condition = (
+      output.resource_share_arn == null &&
+      output.resource_association_ids == {} &&
+      output.principal_association_ids == {}
+    )
+    error_message = "The compact example must leave no RAM outputs or associations when sharing is disabled."
+  }
+}
+
+run "stack_with_sharing" {
+  command = plan
+  module { source = "./examples/stack_compact" }
+  variables {
+    sharing = {
+      name = "tested-compact-share"
+      principals = {
+        application = "123456789012"
+      }
+    }
+  }
+  assert {
+    condition = (
+      output.resource_share_arn == "arn:aws:ram:us-east-1:123456789012:resource-share/11111111-1111-1111-1111-111111111111" &&
+      toset(keys(output.resource_association_ids)) == toset(["core"]) &&
+      toset(keys(output.principal_association_ids)) == toset(["application"])
+    )
+    error_message = "The compact example must propagate the fabric ARN and preserve resource/principal association keys."
+  }
 }

@@ -242,3 +242,129 @@ run "reject_core_global_mismatch" {
   }
   expect_failures = [terraform_data.core_global_relationship]
 }
+
+run "reject_global_reference_invalid_id" {
+  command = plan
+  variables {
+    global_network = { create = false, id = "global-network-not-hex" }
+    core_network   = { description = "core" }
+  }
+  expect_failures = [var.global_network]
+}
+
+run "reject_core_reference_invalid_id" {
+  command = plan
+  variables {
+    global_network = { create = false, id = "global-network-11111111111111111" }
+    core_network   = { create = false, id = "core-network-not-hex" }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "reject_base_policy_empty_object" {
+  command = plan
+  variables {
+    global_network = { description = "global" }
+    core_network = {
+      description = "core"
+      base_policy = {}
+    }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "reject_base_policy_empty_regions" {
+  command = plan
+  variables {
+    global_network = { description = "global" }
+    core_network = {
+      description = "core"
+      base_policy = { regions = [] }
+    }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "reject_base_policy_region_whitespace" {
+  command = plan
+  variables {
+    global_network = { description = "global" }
+    core_network = {
+      description = "core"
+      base_policy = { regions = [" us-west-2"] }
+    }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "reject_base_policy_invalid_region" {
+  command = plan
+  variables {
+    global_network = { description = "global" }
+    core_network = {
+      description = "core"
+      base_policy = { regions = ["invalid"] }
+    }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "reject_base_policy_approval_short" {
+  command = plan
+  variables {
+    global_network = { description = "global" }
+    core_network = {
+      description = "core"
+      base_policy = {
+        policy_document = "{}"
+        approved_sha256 = "abcd"
+      }
+    }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "reject_base_policy_approval_non_hex" {
+  command = plan
+  variables {
+    global_network = { description = "global" }
+    core_network = {
+      description = "core"
+      base_policy = {
+        policy_document = "{}"
+        approved_sha256 = "gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg"
+      }
+    }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "reject_base_policy_approval_with_regions" {
+  command = plan
+  variables {
+    global_network = { description = "global" }
+    core_network = {
+      description = "core"
+      base_policy = {
+        regions         = ["us-west-2"]
+        approved_sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  }
+  expect_failures = [var.core_network]
+}
+
+run "fabric_topology_outputs_are_identical_in_create_and_reference" {
+  command = plan
+  variables {
+    global_network = { create = false, id = "global-network-11111111111111111" }
+    core_network   = { create = false, id = "core-network-11111111111111111" }
+  }
+  assert {
+    condition = (
+      output.core_network_edges_by_region == run.create_global_and_core.core_network_edges_by_region &&
+      output.core_network_segments_by_name == run.create_global_and_core.core_network_segments_by_name
+    )
+    error_message = "Create and reference modes must expose identical complete edge and segment topology."
+  }
+}

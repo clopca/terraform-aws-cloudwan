@@ -231,3 +231,15 @@ run "reject_zero_account_principal_a09" {
   }
   expect_failures = [var.principals]
 }
+
+run "reject_resource_partition_mismatch" {
+  command = plan
+  module { source = "./modules/core-network-share" }
+  variables {
+    resource_share = { name = "cross-partition-resource" }
+    resources = {
+      core = "arn:aws-us-gov:networkmanager::123456789012:core-network/core-network-11111111111111111"
+    }
+  }
+  expect_failures = [terraform_data.partition_and_region]
+}
