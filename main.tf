@@ -122,9 +122,12 @@ module "central_vpcs" {
 
 # ---------- AWS NETWORK FIREWALL ----------
 module "network_firewall" {
-  source   = "aws-ia/networkfirewall/aws"
-  version  = "1.0.2"
-  for_each = var.aws_network_firewall == null ? {} : var.aws_network_firewall
+  source  = "aws-ia/networkfirewall/aws"
+  version = "1.0.2"
+  for_each = {
+    for k, v in try(var.central_vpcs, {}) : k => v
+    if contains(local.network_firewall_vpc_types, v.type) && contains(keys(var.aws_network_firewall), k)
+  }
 
   network_firewall_name        = var.aws_network_firewall[each.key].name
   network_firewall_description = var.aws_network_firewall[each.key].description
@@ -134,17 +137,11 @@ module "network_firewall" {
   network_firewall_policy_change_protection = try(var.aws_network_firewall[each.key].policy_change_protection, false)
   network_firewall_subnet_change_protection = try(var.aws_network_firewall[each.key].subnet_change_protection, false)
 
-  vpc_id = contains(local.network_firewall_vpc_types, try(var.central_vpcs[each.key].type, "")) ? module.central_vpcs[each.key].vpc_attributes.id : "vpc-invalid"
-  vpc_subnets = contains(local.network_firewall_vpc_types, try(var.central_vpcs[each.key].type, "")) ? {
-    for k, v in module.central_vpcs[each.key].private_subnet_attributes_by_az : split("/", k)[1] => v.id if split("/", k)[0] == "endpoints"
-  } : { invalid = "subnet-invalid" }
-  number_azs = contains(local.network_firewall_vpc_types, try(var.central_vpcs[each.key].type, "")) ? var.central_vpcs[each.key].az_count : 0
+  vpc_id      = module.central_vpcs[each.key].vpc_attributes.id
+  vpc_subnets = { for k, v in module.central_vpcs[each.key].private_subnet_attributes_by_az : split("/", k)[1] => v.id if split("/", k)[0] == "endpoints" }
+  number_azs  = each.value.az_count
 
-  routing_configuration = contains(local.network_firewall_vpc_types, try(var.central_vpcs[each.key].type, "")) ? local.routing_configuration[each.key] : {
-    centralized_inspection_without_egress = {
-      connectivity_subnet_route_tables = {}
-    }
-  }
+  routing_configuration = local.routing_configuration[each.key]
 
   tags = merge(
     module.tags.tags_aws,

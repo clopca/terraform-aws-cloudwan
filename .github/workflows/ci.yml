@@ -20,7 +20,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: latest
+          terraform_version: 1.15.8
           terraform_wrapper: false
 
       - name: Check formatting
@@ -50,7 +50,7 @@ jobs:
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: latest
+          terraform_version: 1.15.8
           terraform_wrapper: false
 
       - name: Create provider plugin cache
@@ -98,5 +98,5 @@ jobs:
             terraform -chdir="$dir" validate
           done
 
-      - name: Run mocked contract tests only
-        run: terraform test -filter=tests/unit_contract.tftest.hcl
+      - name: Run mocked contract and example plans
+        run: terraform test -no-color
