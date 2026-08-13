@@ -116,7 +116,7 @@ module "central_vpcs" {
 
   tags = merge(
     module.tags.tags_aws,
-    try(each.value.tags, {})
+    try(var.aws_network_firewall[each.key].tags, {})
   )
 }
 
@@ -124,10 +124,11 @@ module "central_vpcs" {
 module "network_firewall" {
   source  = "aws-ia/networkfirewall/aws"
   version = "1.0.2"
-  for_each = {
-    for k, v in try(var.central_vpcs, {}) : k => v
-    if contains(local.network_firewall_vpc_types, v.type) && contains(keys(var.aws_network_firewall), k)
-  }
+  # Instance keys must come exclusively from caller-defined configuration so
+  # they stay plan-known even when values (e.g. a computed policy_arn) are
+  # unknown until apply (issue #25). Validity of each key is enforced by the
+  # actionable preconditions on output.aws_network_firewall.
+  for_each = var.aws_network_firewall
 
   network_firewall_name        = var.aws_network_firewall[each.key].name
   network_firewall_description = var.aws_network_firewall[each.key].description
@@ -137,11 +138,26 @@ module "network_firewall" {
   network_firewall_policy_change_protection = try(var.aws_network_firewall[each.key].policy_change_protection, false)
   network_firewall_subnet_change_protection = try(var.aws_network_firewall[each.key].subnet_change_protection, false)
 
-  vpc_id      = module.central_vpcs[each.key].vpc_attributes.id
-  vpc_subnets = { for k, v in module.central_vpcs[each.key].private_subnet_attributes_by_az : split("/", k)[1] => v.id if split("/", k)[0] == "endpoints" }
-  number_azs  = each.value.az_count
+  # Plan-known conditionals (not try()) keep evaluation alive for invalid
+  # firewall-to-VPC mappings so the output preconditions can fail the plan
+  # with an actionable message. try() must not wrap these values: it makes
+  # the result dynamically typed, which poisons plan-known keys downstream
+  # (the root cause behind issue #25 resurfacing with computed policy ARNs).
+  vpc_id = contains(keys(try(var.central_vpcs, {})), each.key) ? module.central_vpcs[each.key].vpc_attributes.id : "vpc-invalid"
+  vpc_subnets = contains(keys(try(var.central_vpcs, {})), each.key) ? {
+    for k, v in module.central_vpcs[each.key].private_subnet_attributes_by_az : split("/", k)[1] => v.id if split("/", k)[0] == "endpoints"
+  } : { invalid = "subnet-invalid" }
+  number_azs = contains(keys(try(var.central_vpcs, {})), each.key) ? var.central_vpcs[each.key].az_count : 0
 
-  routing_configuration = local.routing_configuration[each.key]
+  # merge() instead of a conditional: routing_configuration values have
+  # heterogeneous shapes per firewall flow, and a conditional expression would
+  # force type unification across branches (Inconsistent conditional result
+  # types). merge() keeps each entry's own type; real configs win over the
+  # placeholder.
+  routing_configuration = merge(
+    { (each.key) = { centralized_inspection_without_egress = { connectivity_subnet_route_tables = {} } } },
+    local.routing_configuration
+  )[each.key]
 
   tags = merge(
     module.tags.tags_aws,

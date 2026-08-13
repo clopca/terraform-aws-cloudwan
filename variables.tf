@@ -259,7 +259,7 @@ variable "aws_network_firewall" {
     - `subnet_change_protection` = (Optional|bool) Indicates whether it is possible to change the associated subnet(s) after creation. Defaults to `false`.
     - `tags`                     = (Optional|map(string)) Tags to apply to the AWS Network Firewall resource.
 EOF
-  type        = any
+  type        = map(any)
   default     = {}
 
   validation {
