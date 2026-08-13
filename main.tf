@@ -20,10 +20,14 @@ resource "aws_networkmanager_core_network" "core_network" {
   global_network_id = local.create_global_network ? aws_networkmanager_global_network.global_network[0].id : var.global_network_id
 
   create_base_policy = true
-  base_policy_document = jsonencode({
-    for k, v in jsondecode(var.core_network.policy_document) : k => v
-    if k == "version" || k == "core-network-configuration" || k == "segments"
-  })
+  base_policy_document = try(var.core_network.base_policy_regions, null) != null ? null : coalesce(
+    try(var.core_network.base_policy_document, null),
+    jsonencode({
+      for k, v in jsondecode(var.core_network.policy_document) : k => v
+      if k == "version" || k == "core-network-configuration" || k == "segments"
+    })
+  )
+  base_policy_regions = try(var.core_network.base_policy_regions, null)
 
   tags = merge(
     module.tags.tags_aws,
@@ -75,7 +79,7 @@ resource "aws_ram_principal_association" "principal_association" {
 module "central_vpcs" {
   source   = "aws-ia/vpc/aws"
   version  = "4.5.0"
-  for_each = try(var.central_vpcs, {})
+  for_each = var.central_vpcs == null ? {} : var.central_vpcs
 
   name       = try(each.value.name, each.key)
   cidr_block = try(each.value.cidr_block, null)
@@ -111,7 +115,7 @@ module "central_vpcs" {
 module "network_firewall" {
   source   = "aws-ia/networkfirewall/aws"
   version  = "1.0.2"
-  for_each = try(var.aws_network_firewall, {})
+  for_each = var.aws_network_firewall == null ? {} : var.aws_network_firewall
 
   network_firewall_name        = var.aws_network_firewall[each.key].name
   network_firewall_description = var.aws_network_firewall[each.key].description

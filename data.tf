@@ -3,8 +3,8 @@
 locals {
   # ---------- CREATION OF RESOURCES ----------
   # Global Network & Core Network
-  create_global_network = length(keys(var.global_network)) > 0
-  create_core_network   = length(keys(var.core_network)) > 0
+  create_global_network = var.global_network == null ? false : length(keys(var.global_network)) > 0
+  create_core_network   = var.core_network == null ? false : length(keys(var.core_network)) > 0
   # RAM Resources
   create_ram_resources = try(var.core_network.resource_share_name, null) != null
   # VPC types that support AWS Network Firewall integration

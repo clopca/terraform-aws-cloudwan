@@ -4,12 +4,32 @@
 output "global_network" {
   value       = local.create_global_network ? aws_networkmanager_global_network.global_network[0] : null
   description = "Global Network. Full output of aws_networkmanager_global_network."
+
+  precondition {
+    condition     = !(local.create_global_network && var.global_network_id != null)
+    error_message = "Set only one of var.global_network or var.global_network_id; defining both is ambiguous."
+  }
+
+  precondition {
+    condition     = !local.create_core_network || local.create_global_network || var.global_network_id != null
+    error_message = "Creating var.core_network requires exactly one Global Network source: var.global_network or var.global_network_id."
+  }
 }
 
 # CORE NETWORK
 output "core_network" {
   value       = local.create_core_network ? aws_networkmanager_core_network.core_network[0] : null
   description = "Core Network. Full output of aws_networkmanager_core_network."
+
+  precondition {
+    condition     = !(local.create_core_network && var.core_network_arn != null)
+    error_message = "Set only one of var.core_network or var.core_network_arn; defining both is ambiguous."
+  }
+
+  precondition {
+    condition     = length(keys(var.central_vpcs == null ? {} : var.central_vpcs)) == 0 || local.create_core_network || var.core_network_arn != null
+    error_message = "Using var.central_vpcs requires exactly one Core Network source: var.core_network or var.core_network_arn."
+  }
 }
 
 # RESOURCE SHARE
@@ -30,14 +50,14 @@ output "aws_network_firewall" {
   description = "AWS Network Firewall. Full output of aws_networkfirewall_firewall."
 
   precondition {
-    condition     = alltrue([for k in keys(var.aws_network_firewall) : contains(keys(var.central_vpcs), k)])
+    condition     = alltrue([for k in keys(var.aws_network_firewall == null ? {} : var.aws_network_firewall) : contains(keys(var.central_vpcs == null ? {} : var.central_vpcs), k)])
     error_message = "Each key in var.aws_network_firewall must match a key in var.central_vpcs."
   }
 
   precondition {
     condition = alltrue([
-      for k in keys(var.aws_network_firewall) :
-      !contains(keys(var.central_vpcs), k) || contains(local.network_firewall_vpc_types, try(var.central_vpcs[k].type, ""))
+      for k in keys(var.aws_network_firewall == null ? {} : var.aws_network_firewall) :
+      !contains(keys(var.central_vpcs == null ? {} : var.central_vpcs), k) || contains(local.network_firewall_vpc_types, try(var.central_vpcs[k].type, ""))
     ])
     error_message = "Each var.aws_network_firewall entry must reference a central VPC of type inspection, egress_with_inspection, or ingress_with_inspection."
   }
