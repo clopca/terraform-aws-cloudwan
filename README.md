@@ -38,13 +38,13 @@ The example below builds an AWS Network Manager Global Network and Core Network 
 ```hcl
 module "cloudwan" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   global_network = {
     description = "Global Network - AWS Cloud WAN Module"
 
     tags = {
-      Name "global-network"
+      Name = "global-network"
     }
   }
   core_network = {
@@ -67,9 +67,9 @@ If you already have a Network Manager Global Network created, you can pass the I
 ```hcl
 module "cloudwan" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
-  global_network_id "global-network-021aedd98c7487b93"
+  global_network_id = "global-network-021aedd98c7487b93"
 
   core_network = {
     description     = "Global Network - AWS CloudWAN Module"
@@ -90,7 +90,7 @@ In addition, when creating a new Core Network, you can also share it using [AWS 
 ```hcl
 module "cloud_wan" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   global_network = {
     description = "Global Network - ${var.identifier}"
@@ -106,7 +106,7 @@ module "cloud_wan" {
 
     resource_share_name                      = "core-network-share"
     resource_share_allow_external_principals = false
-    ram_share_principals                     = [org-XXX]
+    ram_share_principals                     = ["123456789012"]
 
     tags = {
       Name = "core-network"
@@ -216,7 +216,7 @@ Regarding the VPC routing, a default route (0.0.0.0/0) is created in the **endpo
 ```hcl
 module "inspection_vpc" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   core_network_arn = module.cloud_wan.core_network.arn
 
@@ -266,7 +266,7 @@ Regarding the VPC routing, the default configuration of the `connect_to_public_n
 ```hcl
 module "egress_vpc" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   core_network_arn = module.cloud_wan.core_network.arn
 
@@ -323,7 +323,7 @@ Regarding the VPC routing, the default configuration of the `connect_to_public_n
 ```hcl
 module "egress_with_inspection_vpc" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   core_network_arn = module.cloud_wan.core_network.arn
 
@@ -373,9 +373,9 @@ In addition, additional attributes can be configured for both the **public** and
 Regarding the VPC routing, the CIDR block or Prefix List defined in `var.ipv4_network_definition` (required in this VPC type) will be used to create a VPC route to the Core Network in the **public** route tables.
 
 ```hcl
-module "egress_with_inspection_vpc" {
+module "ingress_vpc" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   core_network_arn = module.cloud_wan.core_network.arn
 
@@ -428,9 +428,9 @@ In addition, additional attributes can be configured for both the **public** and
 Regarding the VPC routing, the CIDR block or Prefix List defined in `var.ipv4_network_definition` (required in this VPC type) will be used to create a VPC route to the Core Network in the **public** route tables.
 
 ```hcl
-module "egress_with_inspection_vpc" {
+module "ingress_with_inspection_vpc" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   core_network_arn = module.cloud_wan.core_network.arn
 
@@ -474,9 +474,9 @@ In addition, additional attributes can be configured for both the **core\_networ
 Regarding the VPC routing, a default route (`0.0.0.0/0`) pointing to the Core Network attachment is created for each caller-defined service subnet group. The `core_network` and `public` keys are reserved and excluded from this generated route map. A `shared_services` VPC with only `core_network` is valid and produces an empty generated service-subnet route map.
 
 ```hcl
-module "egress_with_inspection_vpc" {
+module "shared_services_vpc" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   core_network_arn = module.cloud_wan.core_network.arn
 
@@ -521,7 +521,7 @@ If you configure the creation of an AWS Network Firewall resource in an Inspecti
 ```hcl
 module "cloudwan_central_vpcs" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   global_network = {
     description = "Global Network"
@@ -578,7 +578,7 @@ If you configure the creation of an AWS Network Firewall resource in an Egress V
 ```hcl
 module "cloudwan_central_vpcs" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   global_network = {
     description = "Global Network"
@@ -637,7 +637,7 @@ If you configure the creation of an AWS Network Firewall resource in an Ingress 
 ```hcl
 module "cloudwan_central_vpcs" {
   source  = "aws-ia/cloudwan/aws"
-  version = "3.x.x"
+  version = "~> 3.5"
 
   global_network = {
     description = "Global Network"
