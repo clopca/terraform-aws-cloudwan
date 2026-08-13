@@ -4,7 +4,7 @@ mock_provider "aws" {
     defaults = { partition = "aws" }
   }
   mock_data "aws_region" {
-    defaults = { region = "us-east-1" }
+    defaults = { region = "us-west-2" }
   }
   mock_data "aws_networkmanager_global_network" {
     defaults = {
@@ -42,7 +42,7 @@ mock_provider "aws" {
     defaults = { state = "AVAILABLE" }
   }
   mock_resource "aws_ram_resource_share" {
-    defaults = { arn = "arn:aws:ram:us-east-1:123456789012:resource-share/11111111-1111-1111-1111-111111111111" }
+    defaults = { arn = "arn:aws:ram:us-west-2:123456789012:resource-share/22222222-2222-2222-2222-222222222222" }
   }
 }
 
