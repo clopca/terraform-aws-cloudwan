@@ -74,7 +74,7 @@ locals {
     centralized_inspection_with_egress = {
       connectivity_subnet_route_tables = { for i, j in v.rt_attributes_by_type_by_az.core_network : i => j.id }
       public_subnet_route_tables       = { for i, j in v.rt_attributes_by_type_by_az.public : i => j.id }
-      network_cidr_blocks              = startswith(try(var.ipv4_network_definition, ""), "pl-") ? data.aws_prefix_list.ipv4_network_definition[0].cidr_blocks : [var.ipv4_network_definition]
+      network_cidr_blocks              = startswith(try(var.ipv4_network_definition, ""), "pl-") ? data.aws_ec2_managed_prefix_list.ipv4_network_definition[0].entries[*].cidr : [var.ipv4_network_definition]
     } }
     if var.central_vpcs[k].type == "egress_with_inspection"
   }
@@ -92,10 +92,11 @@ locals {
 
 # ---------- PREFIX LIST TO LIST OF CIDRS ----------
 # For AWS Network Firewall configuration (Egress with Inspection), a list of CIDRs is needed. If the IPv4 Network Definition passed is a prefix list, we need to translate
-data "aws_prefix_list" "ipv4_network_definition" {
+data "aws_ec2_managed_prefix_list" "ipv4_network_definition" {
+  # The pl- selector must be known during planning because it controls count; use a literal or otherwise plan-known ID.
   count = startswith(coalesce(var.ipv4_network_definition, " "), "pl-") ? 1 : 0
 
-  prefix_list_id = var.ipv4_network_definition
+  id = var.ipv4_network_definition
 }
 
 # ---------- SANITIZES TAGS ---------
