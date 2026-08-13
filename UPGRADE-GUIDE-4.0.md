@@ -284,14 +284,25 @@ terraform show -json migration-evidence/v4-first-hop.tfplan \
 
 Create an exact allowlist. Each line is `address|effective-action`; allowed
 actions are `create`, `update`, `forget`, or `import`. Do not allow `delete`.
-Moved resources with `no-op` need no allowlist entry.
+Moved resources with `no-op` need no allowlist entry. A v3 state does not contain
+v4's five `terraform_data` contract resources, so their first-hop `create`
+actions are expected and mandatory. They are state-only records and
+preconditions: they do not call AWS or create AWS objects.
 
+<!-- BEGIN V4 FIRST-HOP ALLOWLIST -->
 ```text
+module.cloudwan.terraform_data.fabric_contract|create
+module.cloudwan.terraform_data.base_policy_approval|create
+module.cloudwan.terraform_data.core_global_relationship|create
 module.cloudwan_policy.aws_networkmanager_core_network_policy_attachment.this|update
+module.cloudwan_policy.terraform_data.policy_approval|create
+module.cloudwan_share.terraform_data.partition_and_region|create
 ```
+<!-- END V4 FIRST-HOP ALLOWLIST -->
 
 Save the following as `migration-evidence/check-plan-allowlist.py`:
 
+<!-- BEGIN V4 PLAN ALLOWLIST CHECKER -->
 ```python
 #!/usr/bin/env python3
 import json
@@ -338,6 +349,7 @@ if errors:
     raise SystemExit("plan rejected:\n" + "\n".join(f"- {item}" for item in errors))
 print(f"plan accepted: {len(seen)} exact non-no-op actions")
 ```
+<!-- END V4 PLAN ALLOWLIST CHECKER -->
 
 Run it against every saved plan:
 
@@ -346,6 +358,16 @@ python3 migration-evidence/check-plan-allowlist.py \
   migration-evidence/v4-first-hop.plan.json \
   migration-evidence/v4-first-hop.allowlist
 ```
+
+The hermetic regression fixture in `tests/fixtures/v3-to-v4-first-hop` applies a
+minimal v3-like migrable state shape with `mock_provider`, plans the real v4 root
+and submodules against the same in-memory state, extracts this allowlist and
+checker from the guide, and mutation-checks every entry plus one unexpected
+action. Run `python3 tests/verify_v3_to_v4_first_hop.py`. It uses the published
+v3 resource addresses and provider schemas instead of the full v3.4.1 root
+because that root requires downloads for its blocked VPC and Network Firewall
+modules even when their collections are empty; therefore the fixture proves the
+migrable first-hop plan shape, not blocked cohorts or real AWS behavior.
 
 Also compare before/after IDs, ARNs, provider bindings, tags, principals,
 base-policy digest, and LIVE policy digest. Preserve the binary plan, JSON,
