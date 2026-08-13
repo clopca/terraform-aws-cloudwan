@@ -28,4 +28,17 @@ output "central_vpcs" {
 output "aws_network_firewall" {
   value       = { for k, v in try(module.network_firewall, {}) : k => v.aws_network_firewall }
   description = "AWS Network Firewall. Full output of aws_networkfirewall_firewall."
+
+  precondition {
+    condition     = alltrue([for k in keys(var.aws_network_firewall) : contains(keys(var.central_vpcs), k)])
+    error_message = "Each key in var.aws_network_firewall must match a key in var.central_vpcs."
+  }
+
+  precondition {
+    condition = alltrue([
+      for k in keys(var.aws_network_firewall) :
+      !contains(keys(var.central_vpcs), k) || contains(local.network_firewall_vpc_types, try(var.central_vpcs[k].type, ""))
+    ])
+    error_message = "Each var.aws_network_firewall entry must reference a central VPC of type inspection, egress_with_inspection, or ingress_with_inspection."
+  }
 }

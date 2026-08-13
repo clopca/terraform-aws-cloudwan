@@ -9,6 +9,8 @@ locals {
   create_base_policy = (try(var.core_network.base_policy_document, null) == null) && (try(var.core_network.base_policy_regions, null) == null) ? false : true
   # RAM Resources
   create_ram_resources = try(var.core_network.resource_share_name, null) != null
+  # VPC types that support AWS Network Firewall integration
+  network_firewall_vpc_types = ["inspection", "egress_with_inspection", "ingress_with_inspection"]
   # to share core network (global service) use AWS RAM from us-east-1 https://docs.aws.amazon.com/network-manager/latest/cloudwan/cloudwan-share-network.html
   ram_global_region = "us-east-1"
 
