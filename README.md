@@ -45,7 +45,7 @@ Network cannot belong to a Global Network that does not yet exist.
 
 ### Reference mode — complete fragment
 
-This complete fragment matches the exact executable
+This complete fragment is equivalent to and expanded from the executable
 [`reference_core_network` example](examples/reference\_core\_network):
 
 ```hcl
@@ -155,7 +155,7 @@ home-region behavior for Core Networks is not verified, and it does not support
 
 ### Sharing — complete fragment
 
-This complete fragment matches the exact executable
+This complete fragment is equivalent to and expanded from the executable
 [`core_network_share` example](examples/core\_network\_share):
 
 ```hcl
@@ -216,7 +216,7 @@ output "resource_share_arn" {
 
 ## Compact one-state composition — complete fragment
 
-This complete fragment matches the exact executable
+This complete fragment is equivalent to and expanded from the executable
 [`stack_compact` example](examples/stack\_compact). Three explicit module blocks
 still produce one state and one plan; no duplicate stack facade is required:
 
