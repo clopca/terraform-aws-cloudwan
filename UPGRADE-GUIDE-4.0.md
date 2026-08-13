@@ -1,67 +1,228 @@
 # Upgrade from Cloud WAN v3 to v4
 
-Version 4 separates fabric, policy, RAM sharing, and regional topology ownership.
-A zero-destroy migration is possible only when a catalog generated from the
-caller's refreshed state proves the exact physical mapping. It is not a generic
-guarantee.
+Version 4 separates fabric, policy deployment, RAM sharing, and regional topology
+ownership. A zero-destroy migration is possible only when refreshed state proves
+the exact physical mapping. This guide is executable, but every address,
+provider binding, key, ID, ARN, and digest must be replaced with values observed
+in the caller's own backend.
+
+## Migration matrix
+
+| v3 surface | Status | v4 destination | Gate |
+|---|---|---|---|
+| Managed or referenced Global Network | **Migrable now** | Root `global_network` boundary | Preserve the existing ID and ownership mode. |
+| Managed or referenced Core Network | **Migrable now** | Root `core_network` boundary | Preserve the existing ID, provider binding, tags, and exact create-only base-policy bytes. |
+| Core Network policy attachment | **Migrable now** | `modules/policy-deployment` | Freeze writers; verify LIVE before and after; move or forget/import the same Core Network ID. |
+| RAM resource share | **Migrable now** | `modules/core-network-share` | Use provider role alias `aws.ram`; preserve share ARN. |
+| RAM resource/principal associations | **Migrable now** | Caller-keyed maps in `modules/core-network-share` | Derive every key and import ID from refreshed state; never infer a count index from HCL order. |
+| `central_vpcs` and their attachments | **Blocked until the regional successor is published** | Future regional composition owner | Keep this cohort on v3; do not delete, re-create, or invent a temporary v4 address. |
+| Network Firewall composition | **Blocked until its successor contract is published** | Future firewall composition owner | Keep on v3 with its current provider and state. |
+| IGW route tables and associations owned by the v3 composition | **Blocked with the central-VPC cohort** | Future regional owner | Move only when the destination address and provider binding are released. |
+| Calculation-only subnet CIDR helpers | **Blocked with their consumer** | Successor typed outputs | Remove only after the successor proves equivalent outputs. |
+
+Do not start a v4 cutover for a state that contains a blocked cohort unless the
+migration boundary has already isolated that cohort in a separate unchanged
+state.
 
 ## Preconditions
 
-- Use Terraform 1.7 or newer and AWS provider 6.59 or newer.
-- Converge the v3 configuration and save a normal full plan with refresh; do not
-  use `-target`.
-- Freeze every Cloud WAN policy writer and record LIVE and LATEST policy version
-  IDs, digests, change-set state, and failed events.
-- Export a state inventory of addresses, IDs, ARNs, principals, tags, and provider
-  bindings.
-- Back up the state and rehearse with a copy before touching the authoritative
-  backend.
-- Reject any plan action containing `delete`, including replacements.
+- Terraform 1.7 or newer and AWS provider 6.59 or newer.
+- The v3 configuration is converged from a normal full refresh plan; no
+  `-target`, `-refresh=false`, or stale saved plan.
+- Every Cloud WAN policy writer is frozen. Record LIVE and LATEST policy version
+  IDs, exact digests, change-set state, and failed change events.
+- The authoritative backend is locked for the complete handoff window.
+- State backups and plan evidence are stored outside the working directory.
+- Any plan action containing `delete` is a hard stop, including
+  `delete,create` replacements.
 
-## Ownership configuration
+## 1. Capture the authoritative baseline
 
-| v3 ownership | First v4 configuration |
-|---|---|
-| Global Network managed by this module | `global_network.create = true`; keep the historical `[0]` address. |
-| Global Network referenced | `create = false` with the same Global Network ID. |
-| Core Network managed by this module | `core_network.create = true`; keep the historical `[0]` address and exact base policy. |
-| Core Network referenced | `create = false` with the same Core Network ID. |
-| Intentional managed-to-reference handoff | First add `removed { destroy = false }`; only then change `create` to false. |
+Run these commands from the **old v3 root** before changing configuration:
 
-Changing `create=true` to `false` without a non-destructive handoff proposes a
-destroy and is forbidden.
-
-## Generic address catalog
-
-The two root singleton addresses remain unchanged:
-
-```text
-module.cloudwan.aws_networkmanager_global_network.global_network[0]
-module.cloudwan.aws_networkmanager_core_network.core_network[0]
+```shell
+set -eu
+mkdir -p migration-evidence
+terraform version > migration-evidence/terraform-version.txt
+terraform providers > migration-evidence/providers.txt
+terraform state pull > migration-evidence/old-state.before.tfstate
+terraform state list > migration-evidence/old-state.addresses.txt
+terraform plan -out=migration-evidence/v3-converged.tfplan
+terraform show -json migration-evidence/v3-converged.tfplan \
+  > migration-evidence/v3-converged.plan.json
 ```
 
-No `moved` block is required for those resources when the same module call keeps
-ownership. The remaining v3 resources move to explicit owners:
+The converged plan must contain no resource changes. Record the physical
+identity and provider binding for each migrable address:
 
-| v3 address pattern | v4 owner/address pattern | Migration action |
-|---|---|---|
-| `module.cloudwan.aws_networkmanager_core_network_policy_attachment.policy_attachment[0]` | `module.cloudwan_policy.aws_networkmanager_core_network_policy_attachment.this` | `moved` in the same state, or `removed` plus import by Core Network ID across states. |
-| `module.cloudwan.aws_ram_resource_share.resource_share[0]` | `module.cloudwan_share.aws_ram_resource_share.this[0]` | `moved` in the same state, or `removed` plus import by share ARN. |
-| `module.cloudwan.aws_ram_resource_association.resource_association[0]` | `module.cloudwan_share.aws_ram_resource_association.this["core"]` | `moved` after verifying the physical Core Network ARN; import ID is `<share-arn>,<resource-arn>`. |
-| `module.cloudwan.aws_ram_principal_association.principal_association[N]` | `module.cloudwan_share.aws_ram_principal_association.this["<caller-key>"]` | One exact `moved` per state-observed principal; import ID is `<share-arn>,<principal>`. Never infer `N` from current HCL order. |
-| `module.cloudwan.module.central_vpcs["<key>"]` | Versioned central-VPC successor selected by its migration guide | Keep on v3 until that successor is published; then use one exact module move per key. |
-| `module.cloudwan.module.network_firewall["<key>"]` | Versioned firewall composition owner selected by its migration guide | Keep on v3 until the destination contract is published; move one exact key at a time. |
-| `module.cloudwan.aws_route_table.igw_route_table["<key>"]` | Regional central-VPC owner | Cross-state `removed`/import or exact caller-root move after destination address and provider are fixed. |
-| `module.cloudwan.aws_route_table_association.igw_route_table_association["<key>"]` | Regional central-VPC owner | Same as its route table; preserve gateway and route-table IDs. |
-| `module.cloudwan.module.public_subnet_cidrs["<key>"]` | Removed calculation helper | No physical resource exists; remove only after the successor owns equivalent typed outputs. |
-| `ipv4_network_definition`, root RAM inputs, `central_vpcs`, and `aws_network_firewall` | Removed root inputs | Re-home values with their new owner; there is no compatibility alias in v4. |
+```shell
+while IFS= read -r address; do
+  printf '\n===== %s =====\n' "$address"
+  terraform state show -no-color "$address"
+done < migration-evidence/old-state.addresses.txt \
+  > migration-evidence/old-state.objects.txt
+```
 
-There are no wildcard moves. Every map key and count index must come from the
-refreshed physical state.
+At minimum, reconcile Global Network ID/ARN, Core Network ID/ARN, share ARN,
+resource ARN, every principal, description, tags, and provider configuration.
 
-## Same-state extraction
+## 2. Extract and verify the exact v3 base-policy bytes
+
+Set the exact Core Network state address. Managed v3 roots normally use the
+address below; confirm it with `terraform state list` rather than assuming it:
+
+```shell
+export CORE_ADDRESS='module.cloudwan.aws_networkmanager_core_network.core_network[0]'
+terraform show -json migration-evidence/old-state.before.tfstate \
+  > migration-evidence/old-state.values.json
+```
+
+The following script writes the state string as UTF-8 **without adding a
+newline**, preserving the bytes Terraform held:
+
+```shell
+python3 - "$CORE_ADDRESS" \
+  migration-evidence/old-state.values.json \
+  migration-evidence/base-policy.v3.json <<'PY'
+import json
+import pathlib
+import sys
+
+address, source, destination = sys.argv[1:]
+document = json.loads(pathlib.Path(source).read_text())
+
+
+def modules(module):
+    yield module
+    for child in module.get("child_modules", []):
+        yield from modules(child)
+
+matches = [
+    resource
+    for module in modules(document["values"]["root_module"])
+    for resource in module.get("resources", [])
+    if resource.get("address") == address
+]
+if len(matches) != 1:
+    raise SystemExit(f"expected one resource at {address}, found {len(matches)}")
+value = matches[0]["values"].get("base_policy_document")
+if not isinstance(value, str) or not value:
+    raise SystemExit("state does not contain a non-empty base_policy_document; inspect base_policy_regions instead")
+pathlib.Path(destination).write_bytes(value.encode("utf-8"))
+PY
+
+python3 -m json.tool migration-evidence/base-policy.v3.json >/dev/null
+shasum -a 256 migration-evidence/base-policy.v3.json \
+  | tee migration-evidence/base-policy.v3.sha256
+wc -c migration-evidence/base-policy.v3.json \
+  | tee migration-evidence/base-policy.v3.bytes
+```
+
+Compare the digest and byte count with the version-controlled v3 source. If v3
+used `base_policy_regions`, export the exact state set instead and use the
+`regions` branch in the first-hop HCL. Do not convert between document and
+regions during migration. The first v4 plan must receive the captured bytes and
+the recorded SHA-256 through `approved_sha256`.
+
+## 3. Write the complete v4 first-hop configuration
+
+The following is a complete same-state first hop for a managed fabric, one policy
+writer, and one RAM share. Replace values with baseline evidence; keep blocked
+regional cohorts in their unchanged v3 state.
 
 ```hcl
+terraform {
+  required_version = ">= 1.7"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.59"
+    }
+  }
+}
+
+provider "aws" {
+  region = "us-west-2"
+}
+
+provider "aws" {
+  alias  = "ram"
+  region = "us-east-1"
+}
+
+variable "global_network_description" {
+  type = string
+}
+
+variable "core_network_description" {
+  type = string
+}
+
+variable "common_tags" {
+  type    = map(string)
+  default = {}
+}
+
+variable "approved_base_policy_sha256" {
+  type = string
+}
+
+variable "resource_share_name" {
+  type = string
+}
+
+variable "production_ou_arn" {
+  type = string
+}
+
+locals {
+  base_policy_document = file("${path.module}/migration-evidence/base-policy.v3.json")
+  desired_policy       = file("${path.module}/policy.v3-live.json")
+}
+
+module "cloudwan" {
+  source  = "aws-ia/cloudwan/aws"
+  version = "~> 4.0"
+
+  global_network = {
+    create      = true
+    description = var.global_network_description
+    tags        = var.common_tags
+  }
+
+  core_network = {
+    create      = true
+    description = var.core_network_description
+    base_policy = {
+      policy_document = local.base_policy_document
+      approved_sha256 = var.approved_base_policy_sha256
+    }
+    tags = var.common_tags
+  }
+
+  tags = var.common_tags
+}
+
+module "cloudwan_policy" {
+  source  = "aws-ia/cloudwan/aws//modules/policy-deployment"
+  version = "~> 4.0"
+
+  core_network_id = module.cloudwan.core_network_id
+  policy_document = local.desired_policy
+  timeouts        = { update = "60m" }
+}
+
+module "cloudwan_share" {
+  source  = "aws-ia/cloudwan/aws//modules/core-network-share"
+  version = "~> 4.0"
+
+  providers = { aws = aws.ram }
+
+  resource_share = { name = var.resource_share_name }
+  resources      = { core = module.cloudwan.core_network_arn }
+  principals     = { production-ou = var.production_ou_arn }
+}
+
 moved {
   from = module.cloudwan.aws_networkmanager_core_network_policy_attachment.policy_attachment[0]
   to   = module.cloudwan_policy.aws_networkmanager_core_network_policy_attachment.this
@@ -77,29 +238,149 @@ moved {
   to   = module.cloudwan_share.aws_ram_resource_association.this["core"]
 }
 
-# Generate one block per physical state entry.
+# Generate one block per state-observed principal. The count index and value
+# below are examples and must match the old state exactly.
 moved {
   from = module.cloudwan.aws_ram_principal_association.principal_association[0]
   to   = module.cloudwan_share.aws_ram_principal_association.this["production-ou"]
 }
 ```
 
-Before accepting the RAM principal move, compare the source state's principal
-value with the destination map value. A mismatch replaces a ForceNew association
-and fails the migration gate.
+The two root singleton addresses remain unchanged when the module call remains
+`module.cloudwan`:
 
-## Cross-state handoff
+```text
+module.cloudwan.aws_networkmanager_global_network.global_network[0]
+module.cloudwan.aws_networkmanager_core_network.core_network[0]
+```
 
-The old state forgets resources without destroying them:
+Use reference mode only for resources that v3 already referenced. A deliberate
+managed-to-reference handoff requires `removed { destroy = false }` before
+changing `create` to `false`.
+
+## 4. Build an exact address and identity catalog
+
+| v3 address pattern | v4 owner/address pattern | Import ID when crossing states |
+|---|---|---|
+| `module.cloudwan.aws_networkmanager_core_network_policy_attachment.policy_attachment[0]` | `module.cloudwan_policy.aws_networkmanager_core_network_policy_attachment.this` | Core Network ID |
+| `module.cloudwan.aws_ram_resource_share.resource_share[0]` | `module.cloudwan_share.aws_ram_resource_share.this[0]` | Share ARN |
+| `module.cloudwan.aws_ram_resource_association.resource_association[0]` | `module.cloudwan_share.aws_ram_resource_association.this["core"]` | `<share-arn>,<resource-arn>` |
+| `module.cloudwan.aws_ram_principal_association.principal_association[N]` | `module.cloudwan_share.aws_ram_principal_association.this["<caller-key>"]` | `<share-arn>,<principal>` |
+
+There are no wildcard moves. For every principal, compare the old state's
+`principal` value with the destination map value. A mismatch proposes replacement
+of a ForceNew association and fails the migration.
+
+## 5. Save plans and run the executable allowlist gate
+
+Generate the first-hop plan and JSON:
+
+```shell
+terraform init -upgrade
+terraform plan -out=migration-evidence/v4-first-hop.tfplan
+terraform show -json migration-evidence/v4-first-hop.tfplan \
+  > migration-evidence/v4-first-hop.plan.json
+```
+
+Create an exact allowlist. Each line is `address|effective-action`; allowed
+actions are `create`, `update`, `forget`, or `import`. Do not allow `delete`.
+Moved resources with `no-op` need no allowlist entry.
+
+```text
+module.cloudwan_policy.aws_networkmanager_core_network_policy_attachment.this|update
+```
+
+Save the following as `migration-evidence/check-plan-allowlist.py`:
+
+```python
+#!/usr/bin/env python3
+import json
+import pathlib
+import sys
+
+plan_path, allowlist_path = map(pathlib.Path, sys.argv[1:])
+plan = json.loads(plan_path.read_text())
+allowed = {}
+for number, raw in enumerate(allowlist_path.read_text().splitlines(), 1):
+    line = raw.strip()
+    if not line or line.startswith("#"):
+        continue
+    try:
+        address, action = line.split("|", 1)
+    except ValueError as error:
+        raise SystemExit(f"invalid allowlist line {number}: {line}") from error
+    allowed[address] = action
+
+errors = []
+seen = set()
+for resource in plan.get("resource_changes", []):
+    address = resource["address"]
+    change = resource.get("change", {})
+    actions = change.get("actions", [])
+    if "delete" in actions:
+        errors.append(f"{address}: forbidden action sequence {actions}")
+        continue
+    if change.get("importing") is not None:
+        effective = "import"
+    elif actions in ([], ["no-op"]):
+        continue
+    else:
+        effective = ",".join(actions)
+    seen.add(address)
+    if allowed.get(address) != effective:
+        errors.append(
+            f"{address}: observed {effective!r}, allowlist has {allowed.get(address)!r}"
+        )
+
+for address in sorted(set(allowed) - seen):
+    errors.append(f"{address}: allowlisted change was not present")
+if errors:
+    raise SystemExit("plan rejected:\n" + "\n".join(f"- {item}" for item in errors))
+print(f"plan accepted: {len(seen)} exact non-no-op actions")
+```
+
+Run it against every saved plan:
+
+```shell
+python3 migration-evidence/check-plan-allowlist.py \
+  migration-evidence/v4-first-hop.plan.json \
+  migration-evidence/v4-first-hop.allowlist
+```
+
+Also compare before/after IDs, ARNs, provider bindings, tags, principals,
+base-policy digest, and LIVE policy digest. Preserve the binary plan, JSON,
+allowlist, state backups, identity manifest, and API evidence.
+
+## 6. Same-state cutover
+
+Only after the allowlist gate and human review pass:
+
+1. Reconfirm the policy-writer freeze and backend lock.
+2. Re-read the saved plan SHA-256 and ensure it is the reviewed artifact.
+3. Apply that exact saved plan: `terraform apply migration-evidence/v4-first-hop.tfplan`.
+4. Call `GetCoreNetworkPolicy(Alias=LIVE)` and verify the recorded digest,
+   version, `EXECUTION_SUCCEEDED`, and no relevant failed event.
+5. Run `terraform state pull`, `terraform state list`, and a new full plan.
+6. Require unchanged physical IDs/ARNs and a clean plan before unfreezing writers.
+
+## 7. Cross-state handoff: exact old-state/new-state order
+
+A cross-state handoff is not transactional. Review both saved plans under one
+operational lock. The **old state must forget first; the new state imports
+second**. Reversing the order creates dual ownership.
+
+Old-state non-destructive removal:
 
 ```hcl
 removed {
   from = module.cloudwan.aws_networkmanager_core_network_policy_attachment.policy_attachment[0]
-  lifecycle { destroy = false }
+  lifecycle {
+    destroy = false
+  }
 }
 ```
 
-The destination state adopts the same object:
+New-state adoption:
 
 ```hcl
 import {
@@ -108,46 +389,34 @@ import {
 }
 ```
 
-Use these import IDs:
+Execute in this exact order:
 
-| Resource | Import ID |
-|---|---|
-| Policy attachment | Core Network ID |
-| RAM resource share | Share ARN |
-| RAM resource association | `<share-arn>,<resource-arn>` |
-| RAM principal association | `<share-arn>,<principal>` |
+1. Freeze all writers and acquire the operational lock spanning both backends.
+2. Pull `old-state.before.tfstate` and `new-state.before.tfstate`; record serials.
+3. Save `old-forget.tfplan` and `new-import.tfplan`; convert both to JSON.
+4. Run the allowlist script on both plans. Old may contain only exact `forget`
+   actions; new may contain only exact `import` actions and explicitly approved
+   normalization updates. Neither may contain `delete`.
+5. Apply **old state** `old-forget.tfplan`.
+6. Verify through AWS read APIs that every physical object still exists with the
+   same ID/ARN and that LIVE policy is unchanged.
+7. Re-plan the new state to ensure its reviewed import assumptions are still
+   current; regenerate and re-review if the saved plan is stale.
+8. Apply **new state** `new-import.tfplan`.
+9. Pull both states. Assert the old addresses are absent, new addresses are
+   present, physical IDs match the baseline, and no object appears in both states.
+10. Run clean full plans in old state first and new state second, then unfreeze
+    writers.
 
-A cross-state handoff is not transactional. Review both saved plans under one
-operational lock and apply the forget/import pair before unfreezing writers.
-Policy import reads LATEST, not authoritative LIVE; compare LIVE externally
-before and after the handoff.
-
-## Preserve the create-only base policy
-
-The first v4 configuration for a managed Core Network must reproduce the exact
-v3 base-policy document captured from configuration/state, together with
-provider binding, description, tags, and default tags. Do not derive a new base
-policy from a semantically similar final policy. Remove the migration bridge only
-in a later, separately reviewed change; v4 ignores later base-policy mutations by
-design.
-
-## Plan JSON gate
-
-Convert every saved plan with `terraform show -json`. Fail the migration if any
-resource action contains `delete`, or if a create, update, forget, or import is
-not in the caller's exact allowlist. Compare before/after IDs, ARNs, principals,
-provider bindings, tags, base-policy digest, and LIVE policy digest. Preserve the
-binary plan, JSON, allowlist, identity manifest, and post-apply evidence.
-
-After apply, verify all physical identities and `GetCoreNetworkPolicy(Alias=LIVE)`,
-inspect failed change events, refresh every state, and require clean plans.
+Policy import reads LATEST, not authoritative LIVE. Compare LIVE externally
+before step 5, after step 6, and after step 8.
 
 ## CAUTION: attachment accepter removal deletes the spoke attachment
 
 Destroying `aws_networkmanager_attachment_accepter` invokes
 `DeleteAttachment`; it deletes the attachment created in the spoke account. It
-must not be used to revoke approval or to move state. Handoff the accepter
-without destroying the remote object:
+must not be used to revoke approval or to move state. Use a non-destructive
+handoff with the exact address from your configuration:
 
 ```hcl
 removed {
@@ -158,33 +427,77 @@ removed {
 }
 ```
 
-Save and inspect the old-state plan first; it must contain only the non-destructive
-forget action. Then plan the destination state with an `import` block targeting
-the same attachment ID. Apply old-state forget before new-state adoption, verify
-the attachment ID and owner account from both states, and only then remove the
-transitional blocks. If the destination cannot import, restore the old state from
-the backup before any further change; never run a normal destroy.
+Plan the old-state forget and destination import together, then follow the exact
+old-state/new-state order above. Verify the same attachment ID and owner account
+from both sides before removing transitional blocks. Never use a normal destroy.
 
-## Appendix: caller-owned singleton wrappers
+## 8. Rollback
 
-Callers that did not use the published v3 module do not match the generic catalog.
-For example, an LDA-like wrapper uses singleton addresses without `[0]` and needs
-caller-root moves such as:
+### Before any state-changing apply
+
+1. Abandon the migration plans.
+2. Restore the v3 configuration and lock selection.
+3. Run a full refresh plan and require it to be clean.
+4. Verify LIVE policy and release the writer freeze.
+
+### After old-state forget but before new-state import
+
+1. Keep writers frozen and both backends locked.
+2. Confirm through AWS read APIs that the physical resource still exists.
+3. Remove the `removed` block, restore the old resource configuration, and import
+   the object back to its exact old address. For example:
+
+   ```shell
+   terraform import \
+     'module.cloudwan.aws_networkmanager_core_network_policy_attachment.policy_attachment[0]' \
+     "$CORE_NETWORK_ID"
+   ```
+
+4. Import RAM objects with the IDs from the catalog: share ARN,
+   `<share-arn>,<resource-arn>`, and `<share-arn>,<principal>`.
+5. Pull old state, compare IDs/ARNs with `old-state.before.tfstate`, and require a
+   clean old-state plan. Confirm the new state still owns none of these objects.
+6. Verify LIVE policy, then release locks and writers.
+
+### After new-state import
+
+1. Keep writers frozen. Do not import the same object back into old state while
+   new state still owns it.
+2. Add destination `removed { destroy = false }` blocks and save a reviewed
+   new-state forget plan.
+3. Apply the **new-state forget first**, verify the physical objects still exist,
+   then restore/import the old-state addresses from the catalog.
+4. Pull both states and prove single ownership in old state, zero ownership in new
+   state, unchanged IDs/ARNs, unchanged base-policy digest, and unchanged LIVE
+   policy digest.
+5. Require clean plans in new state first and old state second before unfreezing.
+
+Use `terraform state push migration-evidence/old-state.before.tfstate` only as an
+emergency backend recovery when no later state write occurred and the backend
+serial/lineage have been independently verified. Prefer explicit imports because
+they reconcile the live object rather than overwriting newer state metadata.
+
+## Appendix: adopting from a custom wrapper
+
+A custom wrapper may use singleton addresses without `[0]`, different module call
+names, or separate provider bindings. It does not match the generic catalog. Build
+the mapping from that wrapper's refreshed state and use caller-root moves such as:
 
 ```hcl
 moved {
-  from = module.cloudwan.aws_networkmanager_global_network.this
+  from = module.custom_cloudwan.aws_networkmanager_global_network.this
   to   = module.cloudwan.aws_networkmanager_global_network.global_network[0]
 }
 
 moved {
-  from = module.cloudwan.aws_networkmanager_core_network.this
+  from = module.custom_cloudwan.aws_networkmanager_core_network.this
   to   = module.cloudwan.aws_networkmanager_core_network.core_network[0]
 }
 ```
 
-Its policy singleton likewise moves to the policy submodule or uses a cross-state
-handoff. The complete caller-specific catalog must be generated from that
-wrapper's real state; the design evidence is documented in the RFC v2 migration
-appendix, `analysis/cloudwan-deep/experts/E3-state-migration.md`, and is not a
-substitute for inspecting the caller backend.
+Move its policy singleton to `modules/policy-deployment`, or use the cross-state
+forget/import sequence. A wrapper-specific catalog must enumerate every physical
+resource, provider binding, count index, map key, and import ID from real state.
+No external appendix or internal repository path is required: the authoritative
+inputs are the refreshed backend, the wrapper's current HCL, this guide's
+allowlist gate, and AWS read evidence.
