@@ -1,47 +1,27 @@
-# --- examples/core_network_share/main.tf ---
-
-# AWS Cloud WAN module
-module "cloud_wan" {
+module "cloudwan" {
   source = "../.."
 
-  global_network = {
-    description = "Global Network - ${var.identifier}"
-
-    tags = {
-      Name = "global-network"
-    }
-  }
-
+  global_network = { description = "shared-global-network" }
   core_network = {
-    description     = "Core Network - ${var.identifier}"
-    policy_document = data.aws_networkmanager_core_network_policy_document.policy.json
-
-    resource_share_name                      = var.identifier
-    resource_share_allow_external_principals = true
-    ram_share_principals                     = [var.aws_account_share]
-
-    tags = {
-      Name = "core-network"
-    }
-  }
-
-  tags = {
-    Project = var.identifier
+    description = "shared-core-network"
+    base_policy = { regions = ["us-west-2"] }
   }
 }
 
-data "aws_networkmanager_core_network_policy_document" "policy" {
-  core_network_configuration {
-    vpn_ecmp_support = false
-    asn_ranges       = ["64515-64520"]
-    edge_locations {
-      location = var.aws_region
-    }
+module "share" {
+  source = "../../modules/core-network-share"
+
+  providers = { aws = aws.us_east_1 }
+
+  resource_share = {
+    name = "shared-core-network"
   }
 
-  segments {
-    name                          = "shared"
-    description                   = "SegmentForSharedServices"
-    require_attachment_acceptance = true
+  resources = {
+    core = module.cloudwan.core_network_arn
+  }
+
+  principals = {
+    network-tools = "123456789012"
   }
 }

@@ -1,43 +1,37 @@
-# --- examples/basic/main.tf ---
+locals {
+  policy_document = jsonencode({
+    version = "2021.12"
+    "core-network-configuration" = {
+      "asn-ranges" = ["64512-64520"]
+      "edge-locations" = [{
+        location = "us-west-2"
+      }]
+    }
+    segments = [{ name = "shared" }]
+  })
+}
 
-# Calling the CloudWAN Module - we are creating both the Global Network and the Core Network
-module "cloud_wan" {
+module "cloudwan" {
   source = "../.."
 
   global_network = {
-    description = "Global Network - ${var.identifier}"
-
-    tags = {
-      Name = "global-network"
-    }
+    description = "basic-global-network"
   }
 
   core_network = {
-    description     = "Core Network - ${var.identifier}"
-    policy_document = data.aws_networkmanager_core_network_policy_document.policy.json
-
-    tags = {
-      Name = "core-network"
+    description = "basic-core-network"
+    base_policy = {
+      policy_document = local.policy_document
     }
   }
 
-  tags = {
-    Project = var.identifier
-  }
+  tags = { Example = "basic" }
 }
 
-data "aws_networkmanager_core_network_policy_document" "policy" {
-  core_network_configuration {
-    vpn_ecmp_support = false
-    asn_ranges       = ["64515-64520"]
-    edge_locations {
-      location = "eu-west-1"
-    }
-  }
+module "policy" {
+  source = "../../modules/policy"
 
-  segments {
-    name                          = "shared"
-    description                   = "SegmentForSharedServices"
-    require_attachment_acceptance = true
-  }
+  core_network_id = module.cloudwan.core_network_id
+  policy_document = local.policy_document
+  timeouts        = { update = "60m" }
 }
