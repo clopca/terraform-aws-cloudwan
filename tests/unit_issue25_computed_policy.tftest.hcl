@@ -7,10 +7,10 @@ mock_provider "aws" {
   }
 }
 
-# Issue #25 regression: a firewall policy ARN computed in the same plan must
-# not poison the network_firewall for_each keys. The fixture plans successfully
-# because instance keys come exclusively from var.aws_network_firewall.
-run "computed_firewall_policy_arn_plans" {
+# Issue #25 regression: static firewall keys with a real unknown policy_arn
+# must plan, and entries may differ in optional attributes. This test must fail
+# if module.network_firewall wraps var.aws_network_firewall in try().
+run "static_firewall_keys_accept_unknown_and_heterogeneous_values" {
   command = plan
 
   module {

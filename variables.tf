@@ -259,39 +259,16 @@ variable "aws_network_firewall" {
     - `subnet_change_protection` = (Optional|bool) Indicates whether it is possible to change the associated subnet(s) after creation. Defaults to `false`.
     - `tags`                     = (Optional|map(string)) Tags to apply to the AWS Network Firewall resource.
 EOF
-  type        = map(any)
-  default     = {}
-
-  validation {
-    condition = var.aws_network_firewall == null ? true : try(alltrue([
-      for firewall in var.aws_network_firewall : length(setsubtract(keys(firewall), [
-        "name",
-        "description",
-        "policy_arn",
-        "delete_protection",
-        "policy_change_protection",
-        "subnet_change_protection",
-        "tags"
-      ])) == 0
-    ]), false)
-    error_message = "Valid keys for each AWS Network Firewall definition are \"name\", \"description\", \"policy_arn\", \"delete_protection\", \"policy_change_protection\", \"subnet_change_protection\", and \"tags\"."
-  }
-
-  validation {
-    condition = var.aws_network_firewall == null ? true : try(alltrue([
-      for firewall in var.aws_network_firewall :
-      contains(keys(firewall), "name") && firewall.name == tostring(firewall.name) &&
-      contains(keys(firewall), "description") && firewall.description == tostring(firewall.description) &&
-      contains(keys(firewall), "policy_arn") && firewall.policy_arn == tostring(firewall.policy_arn) &&
-      (try(firewall.delete_protection, null) == null || firewall.delete_protection == tobool(firewall.delete_protection)) &&
-      (try(firewall.policy_change_protection, null) == null || firewall.policy_change_protection == tobool(firewall.policy_change_protection)) &&
-      (try(firewall.subnet_change_protection, null) == null || firewall.subnet_change_protection == tobool(firewall.subnet_change_protection)) &&
-      (try(firewall.tags, null) == null || alltrue([
-        for value in values(firewall.tags) : value == tostring(value)
-      ]))
-    ]), false)
-    error_message = "Each var.aws_network_firewall entry must include string name, description, and policy_arn; optional protections must be booleans and tags must be a map of strings."
-  }
+  type = map(object({
+    name                     = string
+    description              = string
+    policy_arn               = string
+    delete_protection        = optional(bool)
+    policy_change_protection = optional(bool)
+    subnet_change_protection = optional(bool)
+    tags                     = optional(map(string))
+  }))
+  default = {}
 }
 
 # ---------- TAGS ----------

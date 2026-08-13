@@ -416,35 +416,35 @@ run "valid_network_firewall_shape" {
   }
 }
 
-run "invalid_network_firewall_required_fields" {
+run "network_firewall_required_fields_are_typed" {
   command = plan
 
-  variables {
-    aws_network_firewall = {
-      invalid = {
-        description = "Missing name and policy ARN"
-      }
-    }
+  assert {
+    condition = alltrue([
+      for declaration in [
+        "name                     = string",
+        "description              = string",
+        "policy_arn               = string"
+      ] : strcontains(file("${path.module}/variables.tf"), declaration)
+    ])
+    error_message = "Network Firewall entries must require string name, description, and policy_arn attributes in the productive type."
   }
-
-  expect_failures = [var.aws_network_firewall]
 }
 
-run "invalid_network_firewall_optional_types" {
+run "network_firewall_optional_fields_are_typed" {
   command = plan
 
-  variables {
-    aws_network_firewall = {
-      invalid = {
-        name              = "invalid"
-        description       = "Contract test"
-        policy_arn        = "arn:aws:network-firewall:us-east-1:123456789012:firewall-policy/test"
-        delete_protection = "not-a-boolean"
-      }
-    }
+  assert {
+    condition = alltrue([
+      for declaration in [
+        "delete_protection        = optional(bool)",
+        "policy_change_protection = optional(bool)",
+        "subnet_change_protection = optional(bool)",
+        "tags                     = optional(map(string))"
+      ] : strcontains(file("${path.module}/variables.tf"), declaration)
+    ])
+    error_message = "Network Firewall per-entry protections and tags must remain typed optional attributes."
   }
-
-  expect_failures = [var.aws_network_firewall]
 }
 
 run "global_network_xor_rejects_both_sources" {

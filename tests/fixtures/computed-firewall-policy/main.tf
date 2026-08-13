@@ -7,17 +7,11 @@ terraform {
   }
 }
 
-# Regression fixture for issue #25: the firewall policy ARN is computed (known
-# only after apply). Instance keys of module.network_firewall must come solely
-# from caller-defined map keys so the plan never fails with
-# "Invalid for_each argument".
-resource "aws_networkfirewall_firewall_policy" "computed" {
-  name = "computed-policy"
-
-  firewall_policy {
-    stateless_default_actions          = ["aws:forward_to_sfe"]
-    stateless_fragment_default_actions = ["aws:forward_to_sfe"]
-  }
+# Regression fixture for issue #25: terraform_data.computed.id is unknown
+# during planning. Static firewall keys must remain usable even though one
+# policy_arn is unknown, and optional attributes may differ per entry.
+resource "terraform_data" "computed" {
+  input = "computed-policy"
 }
 
 module "cloudwan" {
@@ -27,10 +21,22 @@ module "cloudwan" {
   ipv4_network_definition = "10.0.0.0/8"
 
   central_vpcs = {
-    inspection = {
+    inspection-minimal = {
       type       = "inspection"
-      name       = "inspection-vpc"
+      name       = "inspection-minimal-vpc"
       cidr_block = "10.10.0.0/24"
+      az_count   = 2
+
+      subnets = {
+        endpoints    = { netmask = 28 }
+        core_network = { netmask = 28 }
+      }
+    }
+
+    inspection-protected = {
+      type       = "inspection"
+      name       = "inspection-protected-vpc"
+      cidr_block = "10.20.0.0/24"
       az_count   = 2
 
       subnets = {
@@ -41,10 +47,20 @@ module "cloudwan" {
   }
 
   aws_network_firewall = {
-    inspection = {
-      name        = "inspection-firewall"
-      description = "Firewall whose policy ARN is computed in the same plan"
-      policy_arn  = aws_networkfirewall_firewall_policy.computed.arn
+    inspection-minimal = {
+      name        = "inspection-minimal-firewall"
+      description = "Firewall whose policy ID is unknown during planning"
+      policy_arn  = terraform_data.computed.id
+    }
+
+    inspection-protected = {
+      name                     = "inspection-protected-firewall"
+      description              = "Firewall with per-entry optional attributes"
+      policy_arn               = "arn:aws:network-firewall:us-east-1:123456789012:firewall-policy/protected"
+      delete_protection        = true
+      policy_change_protection = true
+      subnet_change_protection = true
+      tags                     = { Protection = "enabled" }
     }
   }
 }
