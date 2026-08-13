@@ -16,8 +16,11 @@ resource "aws_networkmanager_global_network" "global_network" {
 resource "aws_networkmanager_core_network" "core_network" {
   count = local.create_core_network ? 1 : 0
 
-  description       = var.core_network.description
-  global_network_id = local.create_global_network ? aws_networkmanager_global_network.global_network[0].id : var.global_network_id
+  description = var.core_network.description
+  global_network_id = local.create_global_network ? aws_networkmanager_global_network.global_network[0].id : coalesce(
+    var.global_network_id,
+    "global-network-invalid"
+  )
 
   create_base_policy = true
   base_policy_document = try(var.core_network.base_policy_regions, null) != null ? null : coalesce(
@@ -95,8 +98,14 @@ module "central_vpcs" {
   vpc_flow_logs = try(each.value.vpc_flow_logs, { log_destination_type = "none" })
 
   core_network = {
-    arn = try(aws_networkmanager_core_network.core_network[0].arn, var.core_network_arn)
-    id  = try(aws_networkmanager_core_network.core_network[0].id, split("/", var.core_network_arn)[1])
+    arn = local.create_core_network ? aws_networkmanager_core_network.core_network[0].arn : coalesce(
+      var.core_network_arn,
+      "arn:aws:networkmanager::000000000000:core-network/core-network-00000000"
+    )
+    id = local.create_core_network ? aws_networkmanager_core_network.core_network[0].id : try(
+      split("/", coalesce(var.core_network_arn, "arn:aws:networkmanager::000000000000:core-network/core-network-00000000"))[1],
+      "core-network-00000000"
+    )
   }
   core_network_routes = each.value.type == "shared_services" ? { for k, v in each.value.subnets : k => "0.0.0.0/0" if k != "public" && k != "core_network" } : local.core_network_routes[each.value.type]
 
