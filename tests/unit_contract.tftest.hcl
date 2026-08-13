@@ -535,7 +535,7 @@ run "valid_shared_services_subnet_contract" {
   }
 }
 
-run "invalid_shared_services_reserved_subnets_only" {
+run "valid_shared_services_core_network_only" {
   command = plan
 
   variables {
@@ -551,8 +551,6 @@ run "invalid_shared_services_reserved_subnets_only" {
       }
     }
   }
-
-  expect_failures = [output.central_vpcs]
 }
 
 run "firewall_key_must_match_central_vpc" {

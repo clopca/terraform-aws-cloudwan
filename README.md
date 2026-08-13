@@ -469,7 +469,7 @@ In addition, additional attributes can be configured for both the **core\_networ
 - `require_acceptance`      = (Optional|bool) Whether the core network VPC attachment requires acceptance or not. Defaults to `false`.
 - `accept_attachment`       = (Optional|bool) Whether the core network VPC attachment is accepted or not in the segment. Only valid if `require_acceptance` is set to `true`. Defaults to `true`.
 
-Regarding the VPC routing, a default route (`0.0.0.0/0`) pointing to the Core Network attachment is created for each caller-defined service subnet group. The `core_network` and `public` keys are reserved and excluded from this generated route map. A `shared_services` VPC must therefore define `core_network` plus at least one additional service subnet group.
+Regarding the VPC routing, a default route (`0.0.0.0/0`) pointing to the Core Network attachment is created for each caller-defined service subnet group. The `core_network` and `public` keys are reserved and excluded from this generated route map. A `shared_services` VPC with only `core_network` is valid and produces an empty generated service-subnet route map.
 
 ```hcl
 module "egress_with_inspection_vpc" {
