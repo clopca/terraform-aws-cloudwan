@@ -124,6 +124,83 @@ used `base_policy_regions`, export the exact state set instead and use the
 regions during migration. The first v4 plan must receive the captured bytes and
 the recorded SHA-256 through `approved_sha256`.
 
+### Capture the exact LIVE policy document for the first hop
+
+Before writing the v4 HCL, query the authoritative LIVE alias and generate the
+`policy.v3-live.json` consumed below. Set the Core Network ID and the LIVE digest
+recorded during the writer freeze; do not substitute LATEST evidence:
+
+```shell
+export CORE_NETWORK_ID='core-network-0123456789abcdef0'
+export RECORDED_LIVE_POLICY_SHA256='<64-hex digest recorded during the writer freeze>'
+
+case "$RECORDED_LIVE_POLICY_SHA256" in
+  *[!0-9a-fA-F]*|'') echo 'RECORDED_LIVE_POLICY_SHA256 must be 64 hex characters' >&2; exit 1 ;;
+esac
+[ "${#RECORDED_LIVE_POLICY_SHA256}" -eq 64 ] || {
+  echo 'RECORDED_LIVE_POLICY_SHA256 must be 64 hex characters' >&2
+  exit 1
+}
+
+aws networkmanager get-core-network-policy \
+  --core-network-id "$CORE_NETWORK_ID" \
+  --alias LIVE \
+  --output json \
+  > migration-evidence/policy.v3-live.aws-response.json
+
+python3 - \
+  migration-evidence/policy.v3-live.aws-response.json \
+  migration-evidence/policy.v3-live.aws.json <<'PY'
+import json
+import pathlib
+import sys
+
+response_path, document_path = map(pathlib.Path, sys.argv[1:])
+response = json.loads(response_path.read_text())
+policy = response.get("CoreNetworkPolicy", {}).get("PolicyDocument")
+if not isinstance(policy, str) or not policy:
+    raise SystemExit("LIVE response has no non-empty CoreNetworkPolicy.PolicyDocument")
+document_path.write_bytes(policy.encode("utf-8"))
+PY
+
+python3 -m json.tool migration-evidence/policy.v3-live.aws.json >/dev/null
+cp migration-evidence/policy.v3-live.aws.json policy.v3-live.json
+python3 -m json.tool policy.v3-live.json >/dev/null
+cmp migration-evidence/policy.v3-live.aws.json policy.v3-live.json
+
+AWS_LIVE_SHA256="$(shasum -a 256 migration-evidence/policy.v3-live.aws.json | awk '{print $1}')"
+VERSIONED_POLICY_SHA256="$(shasum -a 256 policy.v3-live.json | awk '{print $1}')"
+printf '%s  %s\n' "$AWS_LIVE_SHA256" 'policy.v3-live.aws.json' \
+  | tee migration-evidence/policy.v3-live.aws.sha256
+
+[ "$AWS_LIVE_SHA256" = "$(printf '%s' "$RECORDED_LIVE_POLICY_SHA256" | tr '[:upper:]' '[:lower:]')" ] || {
+  echo 'LIVE policy digest does not match the recorded freeze evidence' >&2
+  exit 1
+}
+[ "$VERSIONED_POLICY_SHA256" = "$AWS_LIVE_SHA256" ] || {
+  echo 'versioned desired policy bytes differ from the AWS LIVE document' >&2
+  exit 1
+}
+```
+
+The three artifacts have different roles:
+
+- `policy.v3-live.aws-response.json` is the AWS CLI response envelope retained as
+  evidence. `policy.v3-live.aws.json` is the exact UTF-8 `PolicyDocument` string
+  exposed by AWS after decoding that envelope, written without an added newline.
+- `policy.v3-live.json` is the desired document checked into the migration
+  configuration and read by Terraform. `cmp` proves that its initial bytes are
+  identical to the captured AWS document; later edits are normal reviewed policy
+  changes, not LIVE evidence.
+- `policy.v3-live.aws.sha256` is the operational LIVE digest used for comparison
+  with the separately recorded writer-freeze evidence. A digest proves byte
+  equality, not provenance or LIVE status by itself.
+
+The Python extraction is explicit about the JSON field and fails if it is absent.
+An equivalent `jq -j '.CoreNetworkPolicy.PolicyDocument'` writes the decoded
+string without a trailing newline; do not use `jq -r`, which appends a newline
+and changes the digest.
+
 ## 3. Write the complete v4 first-hop configuration
 
 The following is a complete same-state first hop for a managed fabric, one policy
