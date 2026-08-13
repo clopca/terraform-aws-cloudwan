@@ -48,7 +48,7 @@ EOF
   default     = {}
 
   validation {
-    error_message = "Only valid key values for var.core_network: \"description\", \"policy_document\", \"base_policy_document\", \"base_policy_regions\", \"resource_share_name\", \"resource_share_allow_external_principals\", \"ram_share_principals\", \"tags\"."
+    error_message = "Only valid key values for var.core_network: \"description\", \"policy_document\", \"resource_share_name\", \"resource_share_allow_external_principals\", \"ram_share_principals\", \"tags\"."
     condition = length(setsubtract(keys(var.core_network), [
       "description",
       "policy_document",
@@ -103,7 +103,7 @@ EOF
 
   # Valid VPC types
   validation {
-    error_message = "Central VPC type can only be: \"egress\", \"inspection\", \"inspection_egress\", \"shared_services\", \"ingress\", \"inspection_ingress\"."
+    error_message = "Central VPC type can only be: \"inspection\", \"egress\", \"egress_with_inspection\", \"shared_services\", \"ingress\", \"ingress_with_inspection\"."
     condition = alltrue([
       for vpc in try(var.central_vpcs, {}) : contains(["inspection", "egress", "egress_with_inspection", "shared_services", "ingress", "ingress_with_inspection"], vpc.type)
     ])

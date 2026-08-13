@@ -14,7 +14,7 @@ output "core_network" {
 
 # RESOURCE SHARE
 output "ram_resource_share" {
-  value       = local.create_ram_resources ? aws_ram_resource_share.resource_share[0] : null
+  value       = local.create_ram_resources && local.create_core_network ? aws_ram_resource_share.resource_share[0] : null
   description = "Resource Access Manager (RAM) Resource Share. Full output of aws_ram_resource_share."
 }
 
