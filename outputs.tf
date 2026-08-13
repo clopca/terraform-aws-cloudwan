@@ -73,3 +73,46 @@ output "aws_network_firewall" {
     error_message = "Each var.aws_network_firewall entry must reference a central VPC of type inspection, egress_with_inspection, or ingress_with_inspection."
   }
 }
+
+# STABLE TIER 1 HANDLES
+output "global_network_id" {
+  value       = local.create_global_network ? aws_networkmanager_global_network.global_network[0].id : var.global_network_id
+  description = "Global Network ID, whether created by this module or supplied by the caller."
+}
+
+output "global_network_arn" {
+  value = local.create_global_network ? aws_networkmanager_global_network.global_network[0].arn : (
+    var.global_network_id == null ? null : format(
+      "arn:%s:networkmanager::%s:global-network/%s",
+      data.aws_partition.current[0].partition,
+      data.aws_caller_identity.current[0].account_id,
+      var.global_network_id
+    )
+  )
+  description = "Global Network ARN, whether created by this module or derived for a caller-supplied ID."
+}
+
+output "core_network_id" {
+  value       = local.create_core_network ? aws_networkmanager_core_network.core_network[0].id : try(split("/", var.core_network_arn)[1], null)
+  description = "Core Network ID, whether created by this module or derived from a caller-supplied ARN."
+}
+
+output "core_network_arn" {
+  value       = local.create_core_network ? aws_networkmanager_core_network.core_network[0].arn : var.core_network_arn
+  description = "Core Network ARN, whether created by this module or supplied by the caller."
+}
+
+output "ram_resource_share_arn" {
+  value       = local.create_ram_resources && local.create_core_network ? aws_ram_resource_share.resource_share[0].arn : null
+  description = "RAM Resource Share ARN when this module creates the share."
+}
+
+output "central_vpc_ids" {
+  value       = { for key, vpc in module.central_vpcs : key => vpc.vpc_attributes.id }
+  description = "Central VPC IDs keyed by the caller-owned central_vpcs key."
+}
+
+output "core_network_attachment_ids" {
+  value       = { for key, vpc in module.central_vpcs : key => try(vpc.core_network_attachment.id, null) }
+  description = "Core Network VPC attachment IDs keyed by the caller-owned central_vpcs key."
+}

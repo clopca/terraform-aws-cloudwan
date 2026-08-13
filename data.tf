@@ -88,7 +88,18 @@ locals {
   }
 }
 
-# ---------- PREFIX LIST TO LIST OF CIDRS ----------
+# ---------- REFERENCED GLOBAL NETWORK ARN ----------
+# Network Manager ARNs are global and can be derived from the caller account without
+# introducing a read permission on the referenced Global Network.
+data "aws_partition" "current" {
+  count = !local.create_global_network && var.global_network_id != null ? 1 : 0
+}
+
+data "aws_caller_identity" "current" {
+  count = !local.create_global_network && var.global_network_id != null ? 1 : 0
+}
+
+# ---------- PREFIX LIST TO LIST OF CIDRS ----------
 # For AWS Network Firewall configuration (Egress with Inspection), a list of CIDRs is needed. If the IPv4 Network Definition passed is a prefix list, we need to translate
 data "aws_ec2_managed_prefix_list" "ipv4_network_definition" {
   # The pl- selector must be known during planning because it controls count; use a literal or otherwise plan-known ID.
