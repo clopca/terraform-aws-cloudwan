@@ -82,7 +82,7 @@ resource "aws_ram_principal_association" "principal_association" {
 module "central_vpcs" {
   source   = "aws-ia/vpc/aws"
   version  = "4.5.0"
-  for_each = var.central_vpcs == null ? {} : var.central_vpcs
+  for_each = try(var.central_vpcs, {})
 
   name       = try(each.value.name, each.key)
   cidr_block = try(each.value.cidr_block, null)

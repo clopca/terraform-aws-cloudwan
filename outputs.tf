@@ -27,7 +27,7 @@ output "core_network" {
   }
 
   precondition {
-    condition     = length(keys(var.central_vpcs == null ? {} : var.central_vpcs)) == 0 || local.create_core_network || var.core_network_arn != null
+    condition     = length(keys(try(var.central_vpcs, {}))) == 0 || local.create_core_network || var.core_network_arn != null
     error_message = "Using var.central_vpcs requires exactly one Core Network source: var.core_network or var.core_network_arn."
   }
 }
@@ -45,7 +45,7 @@ output "central_vpcs" {
 
   precondition {
     condition = alltrue([
-      for vpc in values(var.central_vpcs == null ? {} : var.central_vpcs) :
+      for vpc in values(try(var.central_vpcs, {})) :
       try(vpc.type, null) != "shared_services" || (
         contains(keys(try(vpc.subnets, {})), "core_network") &&
         length(setsubtract(keys(try(vpc.subnets, {})), ["public", "core_network"])) > 0
