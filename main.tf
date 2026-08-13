@@ -18,12 +18,33 @@ resource "aws_networkmanager_global_network" "global_network" {
 }
 
 locals {
-  global_network_id = var.global_network.create ? aws_networkmanager_global_network.global_network[0].id : data.aws_networkmanager_global_network.existing[0].id
+  global_network_id  = var.global_network.create ? aws_networkmanager_global_network.global_network[0].id : data.aws_networkmanager_global_network.existing[0].id
+  global_network_arn = var.global_network.create ? aws_networkmanager_global_network.global_network[0].arn : data.aws_networkmanager_global_network.existing[0].arn
 
   base_policy_document        = try(var.core_network.base_policy.policy_document, null)
   base_policy_regions         = try(var.core_network.base_policy.regions, null)
   base_policy_approved_sha256 = try(lower(trimspace(var.core_network.base_policy.approved_sha256)), null)
   base_policy_actual_sha256   = local.base_policy_document == null ? null : sha256(local.base_policy_document)
+}
+
+resource "terraform_data" "fabric_contract" {
+  input = {
+    global_network_create = var.global_network.create
+    core_network_create   = var.core_network.create
+    has_base_policy       = var.core_network.base_policy != null
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !(var.global_network.create && !var.core_network.create)
+      error_message = "An existing Core Network cannot belong to a newly created Global Network."
+    }
+
+    precondition {
+      condition     = var.core_network.base_policy == null || var.core_network.create
+      error_message = "base_policy is CREATE-ONLY and cannot be applied to a referenced Core Network."
+    }
+  }
 }
 
 resource "terraform_data" "base_policy_approval" {
@@ -49,14 +70,9 @@ resource "aws_networkmanager_core_network" "core_network" {
   base_policy_regions  = local.base_policy_regions
   tags                 = merge(var.tags, var.core_network.tags)
 
-  depends_on = [terraform_data.base_policy_approval]
+  depends_on = [terraform_data.fabric_contract, terraform_data.base_policy_approval]
 
   lifecycle {
-    precondition {
-      condition     = var.core_network.base_policy == null || var.core_network.create
-      error_message = "base_policy is CREATE-ONLY and cannot be applied to a referenced Core Network."
-    }
-
     ignore_changes = [
       create_base_policy,
       base_policy_document,

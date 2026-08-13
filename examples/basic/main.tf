@@ -29,7 +29,7 @@ module "cloudwan" {
 }
 
 module "policy" {
-  source = "../../modules/policy"
+  source = "../../modules/policy-deployment"
 
   core_network_id = module.cloudwan.core_network_id
   policy_document = local.policy_document

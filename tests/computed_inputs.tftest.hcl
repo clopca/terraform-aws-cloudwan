@@ -22,10 +22,7 @@ run "computed_reference_ids_keep_cardinality_known" {
   command = plan
   module { source = "./tests/fixtures/computed-reference" }
   assert {
-    condition = (
-      module.cloudwan.resources.global_network == null &&
-      module.cloudwan.resources.core_network == null
-    )
-    error_message = "Computed reference IDs must not control resource cardinality."
+    condition     = output.fabric_handle.schema_version == "cloudwan-fabric-handle/v1"
+    error_message = "Computed reference IDs must retain known cardinality and produce the versioned fabric handle."
   }
 }

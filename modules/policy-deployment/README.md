@@ -9,7 +9,7 @@ Network to return to `AVAILABLE`.
 
 ```hcl
 module "cloudwan_policy" {
-  source  = "aws-ia/cloudwan/aws//modules/policy"
+  source  = "aws-ia/cloudwan/aws//modules/policy-deployment"
   version = "~> 4.0"
 
   core_network_id = module.cloudwan.core_network_id

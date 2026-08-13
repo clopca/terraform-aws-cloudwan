@@ -1,23 +1,11 @@
-# https://github.com/terraform-linters/tflint/blob/master/docs/user-guide/module-inspection.md
-# borrowed & modified indefinitely from https://github.com/ksatirli/building-infrastructure-you-can-mostly-trust/blob/main/.tflint.hcl
-
-plugin "aws" {
+plugin "terraform" {
   enabled = true
-  version = "0.21.1"
-  source  = "github.com/terraform-linters/tflint-ruleset-aws"
+  preset  = "recommended"
 }
 
 config {
-  module = true
-  force  = false
-}
-
-rule "terraform_required_providers" {
-  enabled = true
-}
-
-rule "terraform_required_version" {
-  enabled = true
+  call_module_type = "local"
+  force            = false
 }
 
 rule "terraform_naming_convention" {

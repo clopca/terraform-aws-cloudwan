@@ -9,13 +9,8 @@ locals {
   })
 }
 
-module "cloudwan" {
-  source = "../../modules/stack"
-
-  providers = {
-    aws           = aws
-    aws.us_east_1 = aws.us_east_1
-  }
+module "fabric" {
+  source = "../.."
 
   global_network = { description = "compact-global-network" }
   core_network = {
@@ -23,15 +18,24 @@ module "cloudwan" {
     base_policy = { policy_document = local.policy_document }
   }
 
-  policy_document = local.policy_document
-  policy_timeouts = { update = "1h30m" }
-
-  sharing = {
-    resource_share = { name = "compact-core-network" }
-    principals = {
-      application = "123456789012"
-    }
-  }
-
   tags = { Example = "stack-compact" }
+}
+
+module "policy_deployment" {
+  source = "../../modules/policy-deployment"
+
+  core_network_id = module.fabric.core_network_id
+  policy_document = local.policy_document
+  timeouts        = { update = "1h30m" }
+}
+
+module "share" {
+  count  = var.sharing == null ? 0 : 1
+  source = "../../modules/core-network-share"
+
+  providers = { aws = aws.ram }
+
+  resource_share = { name = var.sharing.name }
+  resources      = { core = module.fabric.core_network_arn }
+  principals     = var.sharing.principals
 }

@@ -142,6 +142,29 @@ binary plan, JSON, allowlist, identity manifest, and post-apply evidence.
 After apply, verify all physical identities and `GetCoreNetworkPolicy(Alias=LIVE)`,
 inspect failed change events, refresh every state, and require clean plans.
 
+## CAUTION: attachment accepter removal deletes the spoke attachment
+
+Destroying `aws_networkmanager_attachment_accepter` invokes
+`DeleteAttachment`; it deletes the attachment created in the spoke account. It
+must not be used to revoke approval or to move state. Handoff the accepter
+without destroying the remote object:
+
+```hcl
+removed {
+  from = module.attachment_accepters.aws_networkmanager_attachment_accepter.this["spoke"]
+  lifecycle {
+    destroy = false
+  }
+}
+```
+
+Save and inspect the old-state plan first; it must contain only the non-destructive
+forget action. Then plan the destination state with an `import` block targeting
+the same attachment ID. Apply old-state forget before new-state adoption, verify
+the attachment ID and owner account from both states, and only then remove the
+transitional blocks. If the destination cannot import, restore the old state from
+the backup before any further change; never run a normal destroy.
+
 ## Appendix: caller-owned singleton wrappers
 
 Callers that did not use the published v3 module do not match the generic catalog.

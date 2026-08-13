@@ -47,7 +47,7 @@ mock_provider "aws" {
 }
 
 mock_provider "aws" {
-  alias           = "us_east_1"
+  alias           = "ram"
   override_during = plan
   mock_data "aws_partition" {
     defaults = { partition = "aws" }

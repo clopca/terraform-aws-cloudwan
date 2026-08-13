@@ -40,6 +40,17 @@ resource "terraform_data" "partition_and_region" {
       ])
       error_message = "Every resource ARN must match the effective AWS partition."
     }
+
+    precondition {
+      condition = alltrue([
+        for principal in values(var.principals) :
+        !startswith(principal, "arn:") || can(regex(
+          "^arn:${data.aws_partition.current.partition}:organizations::[0-9]{12}:(organization/o-[a-z0-9]{10,32}|ou/o-[a-z0-9]{10,32}/ou-[a-z0-9]{4,32}-[a-z0-9]{8,32})$",
+          principal
+        ))
+      ])
+      error_message = "Every Organizations principal ARN must match the effective AWS partition."
+    }
   }
 }
 

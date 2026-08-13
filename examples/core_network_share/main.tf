@@ -11,7 +11,7 @@ module "cloudwan" {
 module "share" {
   source = "../../modules/core-network-share"
 
-  providers = { aws = aws.us_east_1 }
+  providers = { aws = aws.ram }
 
   resource_share = {
     name = "shared-core-network"

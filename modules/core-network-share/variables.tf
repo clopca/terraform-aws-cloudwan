@@ -53,11 +53,11 @@ variable "principals" {
       for key, principal in var.principals :
       can(regex("^[a-z0-9][a-z0-9_-]*$", key)) &&
       (
-        can(regex("^[0-9]{12}$", principal)) ||
+        (can(regex("^[0-9]{12}$", principal)) && principal != "000000000000") ||
         can(regex("^arn:[a-z0-9-]+:organizations::[0-9]{12}:organization/o-[a-z0-9]{10,32}$", principal)) ||
-        can(regex("^arn:[a-z0-9-]+:organizations::[0-9]{12}:ou/o-[a-z0-9]{10,32}/ou-[a-z0-9-]{4,32}$", principal))
+        can(regex("^arn:[a-z0-9-]+:organizations::[0-9]{12}:ou/o-[a-z0-9]{10,32}/ou-[a-z0-9]{4,32}-[a-z0-9]{8,32}$", principal))
       )
     ])
-    error_message = "principals requires stable lowercase keys and a 12-digit account ID, Organization ARN, or OU ARN."
+    error_message = "principals requires stable lowercase keys and a nonzero 12-digit account ID, Organization ARN, or structurally valid OU ARN."
   }
 }

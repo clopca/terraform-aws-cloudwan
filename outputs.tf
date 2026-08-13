@@ -44,11 +44,18 @@ output "core_network_segments_by_name" {
   }
 }
 
-# Tier 3: provider-shaped escape hatch. Do not pass this output across states.
-output "resources" {
-  description = "UNSTABLE Tier 3 provider-shaped escape hatch. Shape may change in any release; prefer Tier 1 outputs."
+# Stable composition record. Increment schema_version only for a documented shape change.
+output "fabric_handle" {
+  description = "Versioned Global Network and Core Network handle for cross-module and cross-state composition."
   value = {
-    global_network = var.global_network.create ? aws_networkmanager_global_network.global_network[0] : null
-    core_network   = var.core_network.create ? aws_networkmanager_core_network.core_network[0] : null
+    schema_version = "cloudwan-fabric-handle/v1"
+    global_network = {
+      id  = local.global_network_id
+      arn = local.global_network_arn
+    }
+    core_network = {
+      id  = local.core_network_id
+      arn = local.core_network_arn
+    }
   }
 }

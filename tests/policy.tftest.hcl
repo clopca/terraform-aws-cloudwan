@@ -7,7 +7,7 @@ mock_provider "aws" {
 
 run "policy_2021_12" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -20,7 +20,7 @@ run "policy_2021_12" {
 
 run "policy_2025_11" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2025.11\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -29,7 +29,7 @@ run "policy_2025_11" {
 
 run "reject_invalid_json" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "not-json"
@@ -39,7 +39,7 @@ run "reject_invalid_json" {
 
 run "reject_unsupported_version" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2030.01\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -49,7 +49,7 @@ run "reject_unsupported_version" {
 
 run "reject_empty_edge_locations" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -59,7 +59,7 @@ run "reject_empty_edge_locations" {
 
 run "reject_blank_edge_location" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\" \"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -69,7 +69,7 @@ run "reject_blank_edge_location" {
 
 run "reject_segments_object" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":{\"shared\":{}}}"
@@ -79,7 +79,7 @@ run "reject_segments_object" {
 
 run "reject_empty_segments" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[]}"
@@ -89,7 +89,7 @@ run "reject_empty_segments" {
 
 run "reject_segment_without_name" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{}]}"
@@ -99,7 +99,7 @@ run "reject_segment_without_name" {
 
 run "approval_absent" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -109,7 +109,7 @@ run "approval_absent" {
 
 run "approval_exact_bytes_match" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -122,7 +122,7 @@ run "approval_exact_bytes_match" {
 
 run "approval_canonical_json_match" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\n  \"segments\": [{\"name\": \"shared\"}],\n  \"version\": \"2021.12\",\n  \"core-network-configuration\": {\"edge-locations\": [{\"location\": \"us-west-2\"}]}\n}"
@@ -135,7 +135,7 @@ run "approval_canonical_json_match" {
 
 run "reject_approval_mismatch" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -149,7 +149,7 @@ run "reject_approval_mismatch" {
 
 run "reject_approval_digest_shape" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -163,7 +163,7 @@ run "reject_approval_digest_shape" {
 
 run "reject_approval_digest_kind" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -177,7 +177,7 @@ run "reject_approval_digest_kind" {
 
 run "compound_timeout_1h30m" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -187,7 +187,7 @@ run "compound_timeout_1h30m" {
 
 run "reject_zero_timeout" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"
@@ -198,7 +198,7 @@ run "reject_zero_timeout" {
 
 run "reject_invalid_timeout" {
   command = plan
-  module { source = "./modules/policy" }
+  module { source = "./modules/policy-deployment" }
   variables {
     core_network_id = "core-network-11111111111111111"
     policy_document = "{\"version\":\"2021.12\",\"core-network-configuration\":{\"edge-locations\":[{\"location\":\"us-west-2\"}]},\"segments\":[{\"name\":\"shared\"}]}"

@@ -95,16 +95,13 @@ run "reference_global_create_core" {
   }
 }
 
-run "create_global_reference_core" {
+run "reject_create_global_reference_core" {
   command = plan
   variables {
     global_network = { description = "created-global" }
     core_network   = { create = false, id = "core-network-11111111111111111" }
   }
-  assert {
-    condition     = length(aws_networkmanager_global_network.global_network) == 1 && length(aws_networkmanager_core_network.core_network) == 0
-    error_message = "Each fabric boundary must select ownership independently."
-  }
+  expect_failures = [terraform_data.fabric_contract]
 }
 
 run "reject_global_create_with_id" {

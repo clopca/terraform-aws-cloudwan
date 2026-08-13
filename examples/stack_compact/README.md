@@ -1,6 +1,6 @@
-# Compact stack
+# Compact one-state composition
 
-Uses the stack facade to create fabric, request policy deployment with a
-compound `1h30m` timeout, and share the Core Network from one state. This profile
-fits one account and owner; larger environments should split the primitives by
-permissions and lifecycle.
+Composes the root fabric, `policy-deployment`, and optional `core-network-share`
+modules directly in one state. The RAM provider is named by role (`aws.ram`), and
+setting `sharing = null` leaves no share module instance or RAM association in
+state. This is the supported compact UX; there is no separate stack facade.

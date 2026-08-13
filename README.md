@@ -69,7 +69,7 @@ Network. Set exactly one of `policy_document` or `regions`. The AWS provider doe
 not reliably apply later changes to `create_base_policy`,
 `base_policy_document`, or `base_policy_regions`; this module therefore ignores
 those attributes after creation. Continuous policy changes belong in
-[`modules/policy`](modules/policy).
+[`modules/policy-deployment`](modules/policy-deployment).
 
 An exact-byte approval digest can protect a document used during creation:
 
@@ -91,7 +91,7 @@ migration hop.
 
 ```hcl
 module "cloudwan_policy" {
-  source  = "aws-ia/cloudwan/aws//modules/policy"
+  source  = "aws-ia/cloudwan/aws//modules/policy-deployment"
   version = "~> 4.0"
 
   core_network_id = module.cloudwan.core_network_id
@@ -111,21 +111,32 @@ not expose an authoritative LIVE policy data source or resource attribute.
 ## Core Network sharing
 
 Use [`modules/core-network-share`](modules/core-network-share) with an explicit
-commercial `us-east-1` provider. Associations are maps keyed by immutable caller
-identity. Version 4.0 rejects GovCloud because its RAM home-region behavior for
-Core Networks is not verified, and it does not support `aws-cn`.
+commercial `us-east-1` provider named by role as `aws.ram`. Associations are maps
+keyed by immutable caller identity. Version 4.0 rejects GovCloud because its RAM
+home-region behavior for Core Networks is not verified, and it does not support
+`aws-cn`.
 
-For one-account, one-owner deployments,
-[`modules/stack`](modules/stack) composes fabric, policy, and optional sharing in
-one state. It still requires separate `aws` and `aws.us_east_1` provider
-configurations and the same external LIVE verification.
+> [!CAUTION]
+> Destroying an `aws_networkmanager_attachment_accepter` calls
+> `DeleteAttachment` and deletes the spoke-owned attachment; it is not a harmless
+> approval removal. For a non-destructive handoff, remove the accepter from its
+> current state with `removed { lifecycle { destroy = false } }`, adopt it in the
+> destination state, verify the same attachment ID, and only then retire the old
+> configuration. See the exact runbook in
+> [UPGRADE-GUIDE-4.0.md](UPGRADE-GUIDE-4.0.md).
+
+For a one-account, one-owner deployment, the supported
+[`stack_compact`](examples/stack\_compact) example composes fabric,
+policy-deployment, and optional sharing directly in one state. It uses `aws.ram`
+and preserves the compact UX without a duplicate stack facade.
 
 ## Output stability
 
-| Tier | Contract | Intended use |
-|---|---|---|
-| Tier 1 | Scalar IDs/ARNs, Core Network state, edges by Region, and segments by name are semver-protected. | Module composition and cross-state contracts. |
-| Tier 3 | `resources` exposes created provider objects and is marked `UNSTABLE`. | Isolated escape-hatch use only; never pass it across states. |
+Scalar IDs/ARNs, Core Network state, edges by Region, segments by name, and the
+versioned `fabric_handle` are semver-protected composition contracts.
+`fabric_handle.schema_version` is `cloudwan-fabric-handle/v1` and prevents callers
+from accidentally pairing IDs and ARNs from different fabrics. Provider-shaped
+resource objects are intentionally not exposed.
 
 `core_network_state` is the value from the last provider refresh, not continuous
 health and not policy deployment evidence.
@@ -134,14 +145,13 @@ health and not policy deployment evidence.
 
 | Example | Demonstrates |
 |---|---|
-| [`basic`](examples/basic) | Fabric plus policy in one state. |
+| [`basic`](examples/basic) | Fabric plus policy deployment in one state. |
 | [`reference_core_network`](examples/reference\_core\_network) | ID-only reference mode with resolved topology. |
-| [`core_network_share`](examples/core\_network\_share) | RAM sharing through an explicit `us-east-1` alias. |
-| [`stack_compact`](examples/stack\_compact) | Compact facade with policy, sharing, and a compound timeout. |
+| [`core_network_share`](examples/core\_network\_share) | RAM sharing through the role alias `aws.ram`. |
+| [`stack_compact`](examples/stack\_compact) | Direct compact composition with optional sharing and a compound timeout. |
 
 All examples are ordinary Terraform configurations. Review resource ownership
-and costs before apply. Tests use mocked providers and `command = plan`; they do
-not call AWS or perform real applies.
+and costs before apply. Tests use mocked providers; no test contacts AWS.
 
 ## Testing
 
@@ -152,18 +162,22 @@ terraform validate -no-color
 terraform test -no-color
 ```
 
+Reusable modules declare only `aws >= 6.59`. CI tests the minimum supported
+provider and the current latest provider; executable applications should commit
+their dependency lock file and may apply a temporary upper bound when needed.
+
 ## Requirements
 
 | Name | Version |
 | ---- | ------- |
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.7 |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.59, < 7.0 |
+| <a name="requirement_aws"></a> [aws](#requirement\_aws) | >= 6.59 |
 
 ## Providers
 
 | Name | Version |
 | ---- | ------- |
-| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.59, < 7.0 |
+| <a name="provider_aws"></a> [aws](#provider\_aws) | >= 6.59 |
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
 
 ## Modules
@@ -178,6 +192,7 @@ No modules.
 | [aws_networkmanager_global_network.global_network](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/networkmanager_global_network) | resource |
 | [terraform_data.base_policy_approval](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [terraform_data.core_global_relationship](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
+| [terraform_data.fabric_contract](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 | [aws_networkmanager_core_network.existing](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/networkmanager_core_network) | data source |
 | [aws_networkmanager_global_network.existing](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/networkmanager_global_network) | data source |
 
@@ -198,7 +213,7 @@ No modules.
 | <a name="output_core_network_id"></a> [core\_network\_id](#output\_core\_network\_id) | Core Network ID in create and reference modes. |
 | <a name="output_core_network_segments_by_name"></a> [core\_network\_segments\_by\_name](#output\_core\_network\_segments\_by\_name) | Resolved Core Network segments keyed by segment name in create and reference modes. |
 | <a name="output_core_network_state"></a> [core\_network\_state](#output\_core\_network\_state) | Core Network state from the last refresh; not continuous health and not proof that a policy is LIVE. |
+| <a name="output_fabric_handle"></a> [fabric\_handle](#output\_fabric\_handle) | Versioned Global Network and Core Network handle for cross-module and cross-state composition. |
 | <a name="output_global_network_arn"></a> [global\_network\_arn](#output\_global\_network\_arn) | Global Network ARN in create and reference modes. |
 | <a name="output_global_network_id"></a> [global\_network\_id](#output\_global\_network\_id) | Global Network ID in create and reference modes. |
-| <a name="output_resources"></a> [resources](#output\_resources) | UNSTABLE Tier 3 provider-shaped escape hatch. Shape may change in any release; prefer Tier 1 outputs. |
 <!-- END_TF_DOCS -->

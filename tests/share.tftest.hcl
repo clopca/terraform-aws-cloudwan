@@ -29,7 +29,7 @@ run "create_share_with_all_principal_forms" {
     principals = {
       account = "123456789012"
       org     = "arn:aws:organizations::123456789012:organization/o-abcdefghij"
-      ou      = "arn:aws:organizations::123456789012:ou/o-abcdefghij/ou-abcd-1234"
+      ou      = "arn:aws:organizations::123456789012:ou/o-abcdefghij/ou-abcd-12345678"
     }
   }
   assert {
@@ -196,4 +196,38 @@ run "reject_reference_partition_mismatch" {
     }
   }
   expect_failures = [terraform_data.partition_and_region]
+}
+
+run "reject_organization_principal_partition_mismatch_a06" {
+  command = plan
+  module { source = "./modules/core-network-share" }
+  variables {
+    resource_share = { name = "cross-partition-principal" }
+    principals = {
+      ou = "arn:aws-us-gov:organizations::123456789012:ou/o-abcdefghij/ou-abcd-12345678"
+    }
+  }
+  expect_failures = [terraform_data.partition_and_region]
+}
+
+run "reject_impossible_ou_id_a08" {
+  command = plan
+  module { source = "./modules/core-network-share" }
+  variables {
+    resource_share = { name = "impossible-ou" }
+    principals = {
+      ou = "arn:aws:organizations::123456789012:ou/o-abcdefghij/ou-----"
+    }
+  }
+  expect_failures = [var.principals]
+}
+
+run "reject_zero_account_principal_a09" {
+  command = plan
+  module { source = "./modules/core-network-share" }
+  variables {
+    resource_share = { name = "zero-account" }
+    principals     = { account = "000000000000" }
+  }
+  expect_failures = [var.principals]
 }
