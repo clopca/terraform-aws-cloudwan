@@ -5,6 +5,8 @@ This module can be used to deploy an [AWS Cloud WAN](https://docs.aws.amazon.com
 
 In addition, the module abstracts Central VPCs' creation and Core Network attachment - with the Global Network and Core Network created either within or outside the same module definition. Central VPC types supported are Inspection, Egress (with or without inspection), Ingress (with or without inspection), and Shared Services. Below you can find more information about the format and definition of each VPC type.
 
+> **AWS provider 6 compatibility break in v3.5:** this release requires `hashicorp/aws >= 6.0.0`. Callers that constrain the provider to `~> 5.x` cannot select v3.5 and must upgrade their provider constraint before upgrading this module. The v6 floor is intentional because the `region` argument used by the module's AWS RAM resources is available only with AWS provider v6; v3.4.1 does not validate with provider 5.x after that argument was introduced (tracked in upstream issue #31).
+
 ## Global Network and Core Network
 
 Two variables - `var.global_network` and `var.core_network` - are used to define the Global Network and Core Network. Starting with the **Global Network**, the following attributes can be configured:
