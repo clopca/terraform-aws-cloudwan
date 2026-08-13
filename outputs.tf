@@ -27,7 +27,7 @@ output "core_network" {
   }
 
   precondition {
-    condition     = length(keys(try(var.central_vpcs, {}))) == 0 || local.create_core_network || var.core_network_arn != null
+    condition     = length(keys(var.central_vpcs)) == 0 || local.create_core_network || var.core_network_arn != null
     error_message = "Using var.central_vpcs requires exactly one Core Network source: var.core_network or var.core_network_arn."
   }
 }
@@ -50,14 +50,14 @@ output "aws_network_firewall" {
   description = "AWS Network Firewall. Full output of aws_networkfirewall_firewall."
 
   precondition {
-    condition     = alltrue([for k in keys(try(var.aws_network_firewall, {})) : contains(keys(try(var.central_vpcs, {})), k)])
+    condition     = alltrue([for k in keys(try(var.aws_network_firewall, {})) : contains(keys(var.central_vpcs), k)])
     error_message = "Each key in var.aws_network_firewall must match a key in var.central_vpcs."
   }
 
   precondition {
     condition = alltrue([
       for k in keys(try(var.aws_network_firewall, {})) :
-      !contains(keys(try(var.central_vpcs, {})), k) || contains(local.network_firewall_vpc_types, try(var.central_vpcs[k].type, ""))
+      !contains(keys(var.central_vpcs), k) || contains(local.network_firewall_vpc_types, try(var.central_vpcs[k].type, ""))
     ])
     error_message = "Each var.aws_network_firewall entry must reference a central VPC of type inspection, egress_with_inspection, or ingress_with_inspection."
   }

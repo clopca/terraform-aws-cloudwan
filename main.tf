@@ -82,7 +82,7 @@ resource "aws_ram_principal_association" "principal_association" {
 module "central_vpcs" {
   source   = "aws-ia/vpc/aws"
   version  = "4.5.0"
-  for_each = try(var.central_vpcs, {})
+  for_each = var.central_vpcs
 
   name       = try(each.value.name, each.key)
   cidr_block = try(each.value.cidr_block, null)
@@ -143,11 +143,11 @@ module "network_firewall" {
   # with an actionable message. try() must not wrap these values: it makes
   # the result dynamically typed, which poisons plan-known keys downstream
   # (the root cause behind issue #25 resurfacing with computed policy ARNs).
-  vpc_id = contains(keys(try(var.central_vpcs, {})), each.key) ? module.central_vpcs[each.key].vpc_attributes.id : "vpc-invalid"
-  vpc_subnets = contains(keys(try(var.central_vpcs, {})), each.key) ? {
+  vpc_id = contains(keys(var.central_vpcs), each.key) ? module.central_vpcs[each.key].vpc_attributes.id : "vpc-invalid"
+  vpc_subnets = contains(keys(var.central_vpcs), each.key) ? {
     for k, v in module.central_vpcs[each.key].private_subnet_attributes_by_az : split("/", k)[1] => v.id if split("/", k)[0] == "endpoints"
   } : { invalid = "subnet-invalid" }
-  number_azs = contains(keys(try(var.central_vpcs, {})), each.key) ? var.central_vpcs[each.key].az_count : 0
+  number_azs = contains(keys(var.central_vpcs), each.key) ? var.central_vpcs[each.key].az_count : 0
 
   # merge() instead of a conditional: routing_configuration values have
   # heterogeneous shapes per firewall flow, and a conditional expression would
