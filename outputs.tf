@@ -84,8 +84,8 @@ output "global_network_arn" {
   value = local.create_global_network ? aws_networkmanager_global_network.global_network[0].arn : (
     var.global_network_id == null ? null : format(
       "arn:%s:networkmanager::%s:global-network/%s",
-      data.aws_partition.current[0].partition,
-      data.aws_caller_identity.current[0].account_id,
+      data.aws_partition.current.partition,
+      data.aws_caller_identity.current.account_id,
       var.global_network_id
     )
   )
