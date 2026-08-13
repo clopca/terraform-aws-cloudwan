@@ -42,6 +42,17 @@ output "ram_resource_share" {
 output "central_vpcs" {
   value       = try(module.central_vpcs, null)
   description = "Central VPC information. Full output of VPC module - https://registry.terraform.io/modules/aws-ia/vpc/aws/latest."
+
+  precondition {
+    condition = alltrue([
+      for vpc in values(var.central_vpcs == null ? {} : var.central_vpcs) :
+      try(vpc.type, null) != "shared_services" || (
+        contains(keys(try(vpc.subnets, {})), "core_network") &&
+        length(setsubtract(keys(try(vpc.subnets, {})), ["public", "core_network"])) > 0
+      )
+    ])
+    error_message = "Each shared_services VPC must define the reserved core_network subnet group and at least one service subnet group. public and core_network are reserved and do not receive generated default routes."
+  }
 }
 
 # AWS NETWORK FIREWALL

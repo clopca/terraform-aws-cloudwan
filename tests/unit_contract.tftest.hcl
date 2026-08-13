@@ -46,6 +46,7 @@ run "firewall_requires_compatible_central_vpc_type" {
         cidr_block = "10.0.0.0/24"
         az_count   = 1
         subnets = {
+          services     = { netmask = 28 }
           core_network = { netmask = 28 }
         }
       }
