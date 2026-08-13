@@ -6,6 +6,46 @@ the exact physical mapping. This guide is executable, but every address,
 provider binding, key, ID, ARN, and digest must be replaced with values observed
 in the caller's own backend.
 
+## Required external evidence directory
+
+Set `EVIDENCE_DIR` once, before running any command in this guide. It is required,
+must be absolute, and must resolve outside the current Git checkout. The guard
+canonicalizes both paths so a symlink cannot place evidence under the checkout.
+All state, plans, API responses, digests, and generated helper files below are
+written there.
+
+```shell
+set -eu
+: "${EVIDENCE_DIR:?set EVIDENCE_DIR to an absolute directory outside the checkout}"
+case "$EVIDENCE_DIR" in
+  /*) ;;
+  *) echo 'EVIDENCE_DIR must be an absolute path' >&2; exit 1 ;;
+esac
+
+EVIDENCE_DIR="$(python3 - "$EVIDENCE_DIR" <<'PY'
+import pathlib
+import sys
+
+print(pathlib.Path(sys.argv[1]).resolve())
+PY
+)"
+CHECKOUT_ROOT="$(git rev-parse --show-toplevel)"
+CHECKOUT_ROOT="$(cd "$CHECKOUT_ROOT" && pwd -P)"
+case "$EVIDENCE_DIR" in
+  "$CHECKOUT_ROOT"|"$CHECKOUT_ROOT"/*)
+    echo 'EVIDENCE_DIR must not be inside the checkout root' >&2
+    exit 1
+    ;;
+esac
+mkdir -p -- "$EVIDENCE_DIR"
+export EVIDENCE_DIR
+export TF_VAR_evidence_dir="$EVIDENCE_DIR"
+printf 'Evidence directory: %s\n' "$EVIDENCE_DIR"
+```
+
+Re-run the `: "${EVIDENCE_DIR:?...}"` check after opening a new shell. Do not
+replace this external directory with a relative path for convenience.
+
 ## Migration matrix
 
 | v3 surface | Status | v4 destination | Gate |
@@ -42,14 +82,14 @@ Run these commands from the **old v3 root** before changing configuration:
 
 ```shell
 set -eu
-mkdir -p migration-evidence
-terraform version > migration-evidence/terraform-version.txt
-terraform providers > migration-evidence/providers.txt
-terraform state pull > migration-evidence/old-state.before.tfstate
-terraform state list > migration-evidence/old-state.addresses.txt
-terraform plan -out=migration-evidence/v3-converged.tfplan
-terraform show -json migration-evidence/v3-converged.tfplan \
-  > migration-evidence/v3-converged.plan.json
+: "${EVIDENCE_DIR:?set EVIDENCE_DIR before capturing evidence}"
+terraform version > "$EVIDENCE_DIR/terraform-version.txt"
+terraform providers > "$EVIDENCE_DIR/providers.txt"
+terraform state pull > "$EVIDENCE_DIR/old-state.before.tfstate"
+terraform state list > "$EVIDENCE_DIR/old-state.addresses.txt"
+terraform plan -out="$EVIDENCE_DIR/v3-converged.tfplan"
+terraform show -json "$EVIDENCE_DIR/v3-converged.tfplan" \
+  > "$EVIDENCE_DIR/v3-converged.plan.json"
 ```
 
 The converged plan must contain no resource changes. Record the physical
@@ -59,8 +99,8 @@ identity and provider binding for each migrable address:
 while IFS= read -r address; do
   printf '\n===== %s =====\n' "$address"
   terraform state show -no-color "$address"
-done < migration-evidence/old-state.addresses.txt \
-  > migration-evidence/old-state.objects.txt
+done < "$EVIDENCE_DIR/old-state.addresses.txt" \
+  > "$EVIDENCE_DIR/old-state.objects.txt"
 ```
 
 At minimum, reconcile Global Network ID/ARN, Core Network ID/ARN, share ARN,
@@ -73,8 +113,8 @@ address below; confirm it with `terraform state list` rather than assuming it:
 
 ```shell
 export CORE_ADDRESS='module.cloudwan.aws_networkmanager_core_network.core_network[0]'
-terraform show -json migration-evidence/old-state.before.tfstate \
-  > migration-evidence/old-state.values.json
+terraform show -json "$EVIDENCE_DIR/old-state.before.tfstate" \
+  > "$EVIDENCE_DIR/old-state.values.json"
 ```
 
 The following script writes the state string as UTF-8 **without adding a
@@ -82,8 +122,8 @@ newline**, preserving the bytes Terraform held:
 
 ```shell
 python3 - "$CORE_ADDRESS" \
-  migration-evidence/old-state.values.json \
-  migration-evidence/base-policy.v3.json <<'PY'
+  "$EVIDENCE_DIR/old-state.values.json" \
+  "$EVIDENCE_DIR/base-policy.v3.json" <<'PY'
 import json
 import pathlib
 import sys
@@ -111,11 +151,11 @@ if not isinstance(value, str) or not value:
 pathlib.Path(destination).write_bytes(value.encode("utf-8"))
 PY
 
-python3 -m json.tool migration-evidence/base-policy.v3.json >/dev/null
-shasum -a 256 migration-evidence/base-policy.v3.json \
-  | tee migration-evidence/base-policy.v3.sha256
-wc -c migration-evidence/base-policy.v3.json \
-  | tee migration-evidence/base-policy.v3.bytes
+python3 -m json.tool "$EVIDENCE_DIR/base-policy.v3.json" >/dev/null
+shasum -a 256 "$EVIDENCE_DIR/base-policy.v3.json" \
+  | tee "$EVIDENCE_DIR/base-policy.v3.sha256"
+wc -c "$EVIDENCE_DIR/base-policy.v3.json" \
+  | tee "$EVIDENCE_DIR/base-policy.v3.bytes"
 ```
 
 Compare the digest and byte count with the version-controlled v3 source. If v3
@@ -146,11 +186,11 @@ aws networkmanager get-core-network-policy \
   --core-network-id "$CORE_NETWORK_ID" \
   --alias LIVE \
   --output json \
-  > migration-evidence/policy.v3-live.aws-response.json
+  > "$EVIDENCE_DIR/policy.v3-live.aws-response.json"
 
 python3 - \
-  migration-evidence/policy.v3-live.aws-response.json \
-  migration-evidence/policy.v3-live.aws.json <<'PY'
+  "$EVIDENCE_DIR/policy.v3-live.aws-response.json" \
+  "$EVIDENCE_DIR/policy.v3-live.aws.json" <<'PY'
 import json
 import pathlib
 import sys
@@ -163,15 +203,15 @@ if not isinstance(policy, str) or not policy:
 document_path.write_bytes(policy.encode("utf-8"))
 PY
 
-python3 -m json.tool migration-evidence/policy.v3-live.aws.json >/dev/null
-cp migration-evidence/policy.v3-live.aws.json policy.v3-live.json
+python3 -m json.tool "$EVIDENCE_DIR/policy.v3-live.aws.json" >/dev/null
+cp "$EVIDENCE_DIR/policy.v3-live.aws.json" policy.v3-live.json
 python3 -m json.tool policy.v3-live.json >/dev/null
-cmp migration-evidence/policy.v3-live.aws.json policy.v3-live.json
+cmp "$EVIDENCE_DIR/policy.v3-live.aws.json" policy.v3-live.json
 
-AWS_LIVE_SHA256="$(shasum -a 256 migration-evidence/policy.v3-live.aws.json | awk '{print $1}')"
+AWS_LIVE_SHA256="$(shasum -a 256 "$EVIDENCE_DIR/policy.v3-live.aws.json" | awk '{print $1}')"
 VERSIONED_POLICY_SHA256="$(shasum -a 256 policy.v3-live.json | awk '{print $1}')"
 printf '%s  %s\n' "$AWS_LIVE_SHA256" 'policy.v3-live.aws.json' \
-  | tee migration-evidence/policy.v3-live.aws.sha256
+  | tee "$EVIDENCE_DIR/policy.v3-live.aws.sha256"
 
 [ "$AWS_LIVE_SHA256" = "$(printf '%s' "$RECORDED_LIVE_POLICY_SHA256" | tr '[:upper:]' '[:lower:]')" ] || {
   echo 'LIVE policy digest does not match the recorded freeze evidence' >&2
@@ -244,6 +284,11 @@ variable "approved_base_policy_sha256" {
   type = string
 }
 
+variable "evidence_dir" {
+  type        = string
+  description = "Absolute external evidence directory exported as TF_VAR_evidence_dir."
+}
+
 variable "resource_share_name" {
   type = string
 }
@@ -253,7 +298,7 @@ variable "production_ou_arn" {
 }
 
 locals {
-  base_policy_document = file("${path.module}/migration-evidence/base-policy.v3.json")
+  base_policy_document = file("${var.evidence_dir}/base-policy.v3.json")
   desired_policy       = file("${path.module}/policy.v3-live.json")
 }
 
@@ -354,9 +399,9 @@ Generate the first-hop plan and JSON:
 
 ```shell
 terraform init -upgrade
-terraform plan -out=migration-evidence/v4-first-hop.tfplan
-terraform show -json migration-evidence/v4-first-hop.tfplan \
-  > migration-evidence/v4-first-hop.plan.json
+terraform plan -out="$EVIDENCE_DIR/v4-first-hop.tfplan"
+terraform show -json "$EVIDENCE_DIR/v4-first-hop.tfplan" \
+  > "$EVIDENCE_DIR/v4-first-hop.plan.json"
 ```
 
 Create an exact allowlist. Each line is `address|effective-action`; allowed
@@ -377,7 +422,7 @@ module.cloudwan_share.terraform_data.partition_and_region|create
 ```
 <!-- END V4 FIRST-HOP ALLOWLIST -->
 
-Save the following as `migration-evidence/check-plan-allowlist.py`:
+Save the following as `$EVIDENCE_DIR/check-plan-allowlist.py`:
 
 <!-- BEGIN V4 PLAN ALLOWLIST CHECKER -->
 ```python
@@ -431,9 +476,9 @@ print(f"plan accepted: {len(seen)} exact non-no-op actions")
 Run it against every saved plan:
 
 ```shell
-python3 migration-evidence/check-plan-allowlist.py \
-  migration-evidence/v4-first-hop.plan.json \
-  migration-evidence/v4-first-hop.allowlist
+python3 "$EVIDENCE_DIR/check-plan-allowlist.py" \
+  "$EVIDENCE_DIR/v4-first-hop.plan.json" \
+  "$EVIDENCE_DIR/v4-first-hop.allowlist"
 ```
 
 The hermetic regression fixture in `tests/fixtures/v3-to-v4-first-hop` applies a
@@ -456,7 +501,7 @@ Only after the allowlist gate and human review pass:
 
 1. Reconfirm the policy-writer freeze and backend lock.
 2. Re-read the saved plan SHA-256 and ensure it is the reviewed artifact.
-3. Apply that exact saved plan: `terraform apply migration-evidence/v4-first-hop.tfplan`.
+3. Apply that exact saved plan: `terraform apply "$EVIDENCE_DIR/v4-first-hop.tfplan"`.
 4. Call `GetCoreNetworkPolicy(Alias=LIVE)` and verify the recorded digest,
    version, `EXECUTION_SUCCEEDED`, and no relevant failed event.
 5. Run `terraform state pull`, `terraform state list`, and a new full plan.
@@ -571,7 +616,7 @@ from both sides before removing transitional blocks. Never use a normal destroy.
    policy digest.
 5. Require clean plans in new state first and old state second before unfreezing.
 
-Use `terraform state push migration-evidence/old-state.before.tfstate` only as an
+Use `terraform state push "$EVIDENCE_DIR/old-state.before.tfstate"` only as an
 emergency backend recovery when no later state write occurred and the backend
 serial/lineage have been independently verified. Prefer explicit imports because
 they reconcile the live object rather than overwriting newer state metadata.
