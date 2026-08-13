@@ -94,7 +94,7 @@ module "central_vpcs" {
     arn = try(aws_networkmanager_core_network.core_network[0].arn, var.core_network_arn)
     id  = try(aws_networkmanager_core_network.core_network[0].id, split("/", var.core_network_arn)[1])
   }
-  core_network_routes = each.value.type == "shared_services" ? { for k, v in each.value.subnets : k => "0.0.0.0/0" if k != "public" || k != "core_network" } : local.core_network_routes[each.value.type]
+  core_network_routes = each.value.type == "shared_services" ? { for k, v in each.value.subnets : k => "0.0.0.0/0" if k != "public" && k != "core_network" } : local.core_network_routes[each.value.type]
 
   subnets = merge(
     local.subnets[each.value.type],
