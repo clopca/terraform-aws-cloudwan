@@ -116,7 +116,7 @@ module "central_vpcs" {
 
   tags = merge(
     module.tags.tags_aws,
-    try(var.aws_network_firewall[each.key].tags, {})
+    try(each.value.tags, {})
   )
 }
 
