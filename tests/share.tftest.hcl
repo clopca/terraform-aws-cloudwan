@@ -232,6 +232,30 @@ run "reject_zero_account_principal_a09" {
   expect_failures = [var.principals]
 }
 
+run "reject_zero_account_organization_principal_a09" {
+  command = plan
+  module { source = "./modules/core-network-share" }
+  variables {
+    resource_share = { name = "zero-account-organization" }
+    principals = {
+      organization = "arn:aws:organizations::000000000000:organization/o-abcdefghij"
+    }
+  }
+  expect_failures = [var.principals]
+}
+
+run "reject_zero_account_ou_principal_a09" {
+  command = plan
+  module { source = "./modules/core-network-share" }
+  variables {
+    resource_share = { name = "zero-account-ou" }
+    principals = {
+      ou = "arn:aws:organizations::000000000000:ou/o-abcdefghij/ou-abcd-12345678"
+    }
+  }
+  expect_failures = [var.principals]
+}
+
 run "reject_resource_partition_mismatch" {
   command = plan
   module { source = "./modules/core-network-share" }
