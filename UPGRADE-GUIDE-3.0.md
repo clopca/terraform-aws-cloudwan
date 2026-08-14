@@ -10,7 +10,7 @@ This guide will explain how the module definition changes from version 2 to 3.
 
 ## Example 1: Creating both Global Network and Core Network using the module
 
-* Version 2.x.x
+* v2 releases
 
 ```hcl
 module "cloud_wan" {
@@ -33,7 +33,7 @@ module "cloud_wan" {
 }
 ```
 
-* Version 3.x.x
+* v3 releases
 
 ```hcl
 module "cloud_wan" {
@@ -57,7 +57,7 @@ module "cloud_wan" {
 
 ## Example 2: Creating Core Network using the module referencing an existing Global Network
 
-* Version 2.x.x
+* v2 releases
 
 ```hcl
 module "cloudwan" {
@@ -80,7 +80,7 @@ module "cloudwan" {
 }
 ```
 
-* Version 3.x.x
+* v3 releases
 
 ```hcl
 module "cloudwan" {

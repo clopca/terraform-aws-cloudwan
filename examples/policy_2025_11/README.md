@@ -23,21 +23,25 @@ data "aws_networkmanager_core_network_policy_document" "routing_and_inspection" 
 
   network_function_groups {
     name                          = "inspection"
+    description                   = "Central inspection attachments"
     require_attachment_acceptance = true
   }
 
   routing_policies {
-    routing_policy_name      = "preferprivate"
-    routing_policy_direction = "inbound"
-    routing_policy_number    = 100
+    routing_policy_name        = "preferprivate"
+    routing_policy_description = "Prefer private application routes"
+    routing_policy_direction   = "inbound"
+    routing_policy_number      = 100
 
     routing_policy_rules {
       rule_number = 100
+
       rule_definition {
         match_conditions {
           type  = "prefix-in-cidr"
           value = "10.0.0.0/8"
         }
+
         action {
           type  = "set-local-preference"
           value = "200"
@@ -46,12 +50,48 @@ data "aws_networkmanager_core_network_policy_document" "routing_and_inspection" 
     }
   }
 
+  attachment_routing_policy_rules {
+    rule_number    = 100
+    description    = "Apply private-route preference to trusted attachments"
+    edge_locations = ["us-west-2", "us-east-1"]
+
+    conditions {
+      type  = "routing-policy-label"
+      value = "trusted"
+    }
+
+    action {
+      associate_routing_policies = ["preferprivate"]
+    }
+  }
+
   segment_actions {
     action  = "send-via"
     mode    = "single-hop"
     segment = "application"
-    when_sent_to { segments = ["sharedservices"] }
-    via { network_function_groups = ["inspection"] }
+
+    when_sent_to {
+      segments = ["sharedservices"]
+    }
+
+    via {
+      network_function_groups = ["inspection"]
+    }
+  }
+
+  attachment_policies {
+    rule_number = 50
+
+    conditions {
+      type     = "tag-value"
+      operator = "equals"
+      key      = "network-function"
+      value    = "inspection"
+    }
+
+    action {
+      add_to_network_function_group = "inspection"
+    }
   }
 }
 ```
@@ -71,9 +111,11 @@ data "aws_networkmanager_core_network_policy_document" "routing_and_inspection" 
 terraform init
 terraform validate
 terraform plan -out=tfplan
-terraform output policy_version
-terraform output policy_document_sha256
 ```
+
+The `policy_version` and `policy_document_sha256` outputs become available after an approved `terraform apply tfplan`;
+`terraform output` reads state, not the saved plan. Use `terraform show tfplan`
+to inspect planned values without applying.
 
 Provider rendering proves schema construction, not that network function
 attachments are ready or that the document is LIVE. Verify attachment state,

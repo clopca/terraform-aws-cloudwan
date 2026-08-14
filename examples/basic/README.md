@@ -47,8 +47,11 @@ module "policy" {
 terraform init
 terraform validate
 terraform plan -out=tfplan
-terraform output policy_document_sha256
 ```
+
+The `policy_document_sha256` output becomes available after an approved `terraform apply tfplan`;
+`terraform output` reads state, not the saved plan. Use `terraform show tfplan`
+to inspect planned values without applying.
 
 After a real apply, verify the LIVE alias, document digest, execution state, and
 change events using the [policy deployment guide](../../docs/policy-deployment.md).

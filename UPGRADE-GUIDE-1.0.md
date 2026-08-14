@@ -7,7 +7,7 @@ If you are using a version 0.x of this module and want to move to a version 1.x,
 ```hcl
 module "cloudwan" {
   source  = "aws-ia/cloudwan/aws"
-  version = "0.x.x"
+  version = "~> 0.0"
 
   global_network = {
     create      = true
@@ -25,7 +25,7 @@ module "cloudwan" {
 
 module "new_cloudwan" {
   source  = "aws-ia/cloudwan/aws"
-  version = "1.x.x"
+  version = "~> 1.0"
 
   global_network = {
     create = false

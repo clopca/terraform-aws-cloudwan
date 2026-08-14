@@ -1,7 +1,8 @@
 # Testing and validation
 
-The repository test path is plan-only and uses Terraform mock providers. It must
-not run a real `terraform apply` against AWS.
+The repository test path uses Terraform mock providers and must not run a real
+`terraform apply` against AWS. Most runs are plan-only; stateful lifecycle and
+migration regressions use mock-provider apply.
 
 ## Local quality gate
 

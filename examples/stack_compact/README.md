@@ -50,8 +50,11 @@ module "share" {
 terraform init
 terraform validate
 terraform plan -out=tfplan
-terraform output resource_share_arn
 ```
+
+The `resource_share_arn` output becomes available after an approved `terraform apply tfplan`;
+`terraform output` reads state, not the saved plan. Use `terraform show tfplan`
+to inspect planned values without applying.
 
 Set `sharing = null` to omit all RAM resources. Use separate states instead when
 fabric ownership, policy release, and sharing have different operators,

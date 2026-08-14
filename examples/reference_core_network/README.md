@@ -45,8 +45,11 @@ module "cloudwan" {
 terraform init
 terraform validate
 terraform plan
-terraform output core_network_edges_by_region
 ```
+
+The `core_network_edges_by_region` output becomes available after an approved `terraform apply tfplan`;
+`terraform output` reads state, not the saved plan. Use `terraform show tfplan`
+to inspect planned values without applying.
 
 A static or mocked plan proves the reference contract only. For a real plan,
 compare the resolved IDs, ARNs, relationship, edges, and segments with the

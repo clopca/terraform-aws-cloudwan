@@ -50,8 +50,11 @@ module "share" {
 terraform init
 terraform validate
 terraform plan -out=tfplan
-terraform output principal_association_ids
 ```
+
+The `principal_association_ids` output becomes available after an approved `terraform apply tfplan`;
+`terraform output` reads state, not the saved plan. Use `terraform show tfplan`
+to inspect planned values without applying.
 
 The share does not create or accept spoke VPC attachments. Define the attachment,
 segment acceptance, and owner-account workflow separately, and never destroy an

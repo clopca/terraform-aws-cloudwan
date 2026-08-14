@@ -53,6 +53,10 @@ if git -C "$repo_root" grep -niEI 'mermaid|analysis/|RFC|tanda|LDA' -- '*.md' ':
   fail "Forbidden diagram or process vocabulary found in published Markdown"
 fi
 
+if git -C "$repo_root" grep -nEI '\b([0-9]+\.)?x\.x\b' -- '*.md'; then
+  fail "Version placeholder (x.x) found in published Markdown; use a valid constraint or prose release name"
+fi
+
 python3 - "$repo_root" <<'PY'
 from pathlib import Path
 import re
