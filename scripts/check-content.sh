@@ -8,8 +8,11 @@ fail() {
   exit 1
 }
 
-grep -Fxq '# AWS Cloud WAN Terraform module' "$repo_root/.header.md"
-grep -Fxq '# AWS Cloud WAN Terraform module' "$repo_root/README.md"
+grep -Fxq '# AWS Cloud WAN Module' "$repo_root/.header.md"
+grep -Fxq '# AWS Cloud WAN Module' "$repo_root/README.md"
+grep -Fxq '## Navigation' "$repo_root/.header.md"
+grep -Fxq '## Key capabilities' "$repo_root/.header.md"
+grep -Fxq '## Quick start' "$repo_root/.header.md"
 grep -Fq 'source  = "aws-ia/cloudwan/aws"' "$repo_root/.header.md"
 grep -Fq 'version = "~> 4.0"' "$repo_root/.header.md"
 
@@ -57,6 +60,13 @@ if failures:
     raise SystemExit("\n".join(failures))
 print(f"Validated Markdown links and HCL fences: {hcl_count}")
 PY
+
+scratch="$(mktemp -d "${TMPDIR:-/tmp}/cloudwan-docs-check.XXXXXX")"
+trap 'rm -R -- "$scratch"' EXIT
+cp "$repo_root/.header.md" "$repo_root/.terraform-docs.yaml" "$scratch/"
+cp "$repo_root"/*.tf "$scratch/"
+terraform-docs "$scratch" >/dev/null
+cmp -s "$repo_root/README.md" "$scratch/README.md" || fail "README.md is not generated from .header.md and the current Terraform contract"
 
 python3 "$repo_root/tests/verify_v3_to_v4_first_hop.py"
 

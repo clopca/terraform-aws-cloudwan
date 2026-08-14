@@ -1,335 +1,139 @@
 <!-- BEGIN_TF_DOCS -->
-# AWS Cloud WAN Terraform module
+# AWS Cloud WAN Module
 
 [![Terraform Registry](https://img.shields.io/badge/Terraform%20Registry-aws--ia%2Fcloudwan-844FBA?logo=terraform)](https://registry.terraform.io/modules/aws-ia/cloudwan/aws/latest)
+[![CI](https://github.com/aws-ia/terraform-aws-cloudwan/actions/workflows/ci.yml/badge.svg)](https://github.com/aws-ia/terraform-aws-cloudwan/actions/workflows/ci.yml)
 [![License](https://img.shields.io/github/license/aws-ia/terraform-aws-cloudwan)](LICENSE)
 
-This module creates or references one AWS Network Manager Global Network and one
-Cloud WAN Core Network. The root module owns only the fabric boundary. Policy
-deployment and AWS RAM sharing are separate submodules so permissions, cadence,
-and state ownership can be selected independently.
+This module creates or references an AWS Network Manager Global Network and
+Cloud WAN Core Network, deploys Core Network policies through a dedicated
+submodule, and shares Core Networks through AWS Resource Access Manager (RAM).
+The boundaries can use separate providers, permissions, states, and release
+cadences while composing through stable IDs, ARNs, and `fabric_handle`.
 
 > [!IMPORTANT]
-> Upgrading from v3 requires declarative state migration. Follow
-> [UPGRADE-GUIDE-4.0.md](UPGRADE-GUIDE-4.0.md) and reject every plan containing a
-> delete or replacement before changing a production state.
+> Upgrading from v3? Follow [UPGRADE-GUIDE-4.0.md](UPGRADE-GUIDE-4.0.md) before
+> changing configuration or state. Reject any migration plan that deletes or
+> replaces an existing fabric, policy attachment, share, or association.
 
-## Usage
+## Navigation
+
+- [Key capabilities](#key-capabilities)
+- [Cost warning](#cost-warning)
+- [Quick start](#quick-start)
+- [Documentation](#documentation)
+- [Examples](#examples)
+- [Operational boundaries](#operational-boundaries)
+- [Testing](#testing)
+- [Inputs](#inputs)
+- [Outputs](#outputs)
+
+## Key capabilities
+
+- **Create or reference a fabric:** independently select ownership for one Global
+  Network and one Core Network without deriving resource count from computed IDs.
+- **Stable composition handle:** consume scalar IDs and ARNs, topology maps keyed
+  by Region or segment, and the versioned `fabric_handle` contract.
+- **Create-only base policy:** seed a new Core Network from Regions or an exact
+  policy document, optionally protected by a reviewed SHA-256 digest.
+- **Continuous policy deployment:** submit `2021.12` or `2025.11` documents with
+  optional digest approval and configurable provider update timeout.
+- **Explicit sharing:** create or reference a RAM share and manage Core Network,
+  account, Organization, and organizational-unit associations under stable keys.
+- **Provider-by-role composition:** keep fabric operations in their deployment
+  Region and bind RAM operations to a commercial `us-east-1` provider.
+
+## Cost warning
+
+> [!WARNING]
+> `terraform apply` can create Cloud WAN Core Network Edges, policy deployments,
+> attachments, and RAM shares. Core Network Edge hours, attachment hours, data
+> processing, inter-Region transfer, and connected VPC or security services can
+> incur charges. Review [AWS Cloud WAN pricing](https://aws.amazon.com/cloud-wan/pricing/)
+> and each example before applying. `terraform init` and `terraform validate`
+> create no AWS resources.
+
+## Quick start
 
 ```hcl
 module "cloudwan" {
   source  = "aws-ia/cloudwan/aws"
   version = "~> 4.0"
 
-  global_network = {
-    description = "production-global-network"
-  }
-
+  global_network = { description = "production-global-network" }
   core_network = {
     description = "production-core-network"
-    base_policy = {
-      regions = ["us-west-2", "eu-west-1"]
-    }
+    base_policy = { regions = ["us-west-2", "eu-west-1"] }
   }
 
-  tags = {
-    Environment = "production"
-  }
-}
-```
-
-The `create` selector at each boundary must be known during planning. IDs may be
-computed because they do not control resource cardinality. Creating a Global
-Network while referencing an existing Core Network is rejected because that Core
-Network cannot belong to a Global Network that does not yet exist.
-
-### Reference mode — complete fragment
-
-This complete fragment is equivalent to and expanded from the executable
-[`reference_core_network` example](examples/reference\_core\_network):
-
-```hcl
-terraform {
-  required_version = ">= 1.7"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 6.59"
-    }
-  }
-}
-
-provider "aws" {
-  region = "us-west-2"
-}
-
-variable "global_network_id" {
-  type        = string
-  description = "Existing Global Network ID."
-  default     = "global-network-0123456789abcdef0"
-}
-
-variable "core_network_id" {
-  type        = string
-  description = "Existing Core Network ID belonging to global_network_id."
-  default     = "core-network-0123456789abcdef0"
-}
-
-module "cloudwan" {
-  source  = "aws-ia/cloudwan/aws"
-  version = "~> 4.0"
-
-  global_network = {
-    create = false
-    id     = var.global_network_id
-  }
-
-  core_network = {
-    create = false
-    id     = var.core_network_id
-  }
-}
-
-output "fabric_handle" {
-  value = module.cloudwan.fabric_handle
-}
-```
-
-Reference mode is ID-only and owns no Network Manager resource. AWS data sources
-resolve ARNs, state, edges, and segments, and a precondition verifies that the
-Core Network belongs to the resolved Global Network.
-
-## Create-only base policy
-
-`core_network.base_policy` is available only when initially creating a Core
-Network. Set exactly one of `policy_document` or `regions`. The AWS provider does
-not reliably apply later changes to `create_base_policy`,
-`base_policy_document`, or `base_policy_regions`; this module therefore ignores
-those attributes after creation. Continuous policy changes belong in
-[`modules/policy-deployment`](modules/policy-deployment).
-
-An exact-byte approval digest can protect a document used during creation:
-
-```hcl
-core_network = {
-  description = "production-core-network"
-  base_policy = {
-    policy_document = file("${path.module}/base-policy.json")
-    approved_sha256 = var.approved_base_policy_sha256
-  }
-}
-```
-
-The digest proves equality only. A review pipeline must establish provenance and
-approve the saved plan. Preserve the exact v3 base-policy bytes during the first
-migration hop.
-
-## Policy deployment
-
-```hcl
-module "cloudwan_policy" {
-  source  = "aws-ia/cloudwan/aws//modules/policy-deployment"
-  version = "~> 4.0"
-
-  core_network_id = module.cloudwan.core_network_id
-  policy_document = file("${path.module}/policy.json")
-  timeouts        = { update = "60m" }
-}
-```
-
-Terraform requests Put and Execute, but the provider reads LATEST and does not
-prove that the desired policy is LIVE. Verify `GetCoreNetworkPolicy(Alias=LIVE)`,
-the expected digest and version, successful execution, and change events outside
-Terraform. See the policy submodule's verification and recovery runbook.
-
-`live_policy_version_id` is intentionally absent because AWS provider 6.59 does
-not expose an authoritative LIVE policy data source or resource attribute.
-
-## Core Network sharing
-
-Use [`modules/core-network-share`](modules/core-network-share) with an explicit
-commercial `us-east-1` provider named by role as `aws.ram`. Associations are maps
-keyed by immutable caller identity. Version 4.0 rejects GovCloud because its RAM
-home-region behavior for Core Networks is not verified, and it does not support
-`aws-cn`.
-
-### Sharing — complete fragment
-
-This complete fragment is equivalent to and expanded from the executable
-[`core_network_share` example](examples/core\_network\_share):
-
-```hcl
-terraform {
-  required_version = ">= 1.7"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 6.59"
-    }
-  }
-}
-
-provider "aws" {
-  region = "us-west-2"
-}
-
-provider "aws" {
-  alias  = "ram"
-  region = "us-east-1"
-}
-
-module "cloudwan" {
-  source  = "aws-ia/cloudwan/aws"
-  version = "~> 4.0"
-
-  global_network = { description = "shared-global-network" }
-  core_network = {
-    description = "shared-core-network"
-    base_policy = { regions = ["us-west-2"] }
-  }
-}
-
-module "cloudwan_share" {
-  source  = "aws-ia/cloudwan/aws//modules/core-network-share"
-  version = "~> 4.0"
-
-  providers = { aws = aws.ram }
-
-  resource_share = { name = "shared-core-network" }
-  resources      = { core = module.cloudwan.core_network_arn }
-  principals     = { network-tools = "123456789012" }
-}
-
-output "resource_share_arn" {
-  value = module.cloudwan_share.resource_share_arn
-}
-```
-
-> [!CAUTION]
-> Destroying an `aws_networkmanager_attachment_accepter` calls
-> `DeleteAttachment` and deletes the spoke-owned attachment; it is not a harmless
-> approval removal. For a non-destructive handoff, remove the accepter from its
-> current state with `removed { lifecycle { destroy = false } }`, adopt it in the
-> destination state, verify the same attachment ID, and only then retire the old
-> configuration. See the exact runbook in
-> [UPGRADE-GUIDE-4.0.md](UPGRADE-GUIDE-4.0.md).
-
-## Compact one-state composition — complete fragment
-
-This complete fragment is equivalent to and expanded from the executable
-[`stack_compact` example](examples/stack\_compact). Three explicit module blocks
-still produce one state and one plan; no duplicate stack facade is required:
-
-```hcl
-terraform {
-  required_version = ">= 1.7"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = ">= 6.59"
-    }
-  }
-}
-
-provider "aws" {
-  region = "us-west-2"
-}
-
-provider "aws" {
-  alias  = "ram"
-  region = "us-east-1"
-}
-
-locals {
-  policy_document = jsonencode({
-    version = "2021.12"
-    "core-network-configuration" = {
-      "asn-ranges"     = ["64512-64520"]
-      "edge-locations" = [{ location = "us-west-2" }]
-    }
-    segments = [{ name = "shared" }]
-  })
-}
-
-module "fabric" {
-  source  = "aws-ia/cloudwan/aws"
-  version = "~> 4.0"
-
-  global_network = { description = "compact-global-network" }
-  core_network = {
-    description = "compact-core-network"
-    base_policy = { policy_document = local.policy_document }
-  }
   tags = { Environment = "production" }
 }
-
-module "policy_deployment" {
-  source  = "aws-ia/cloudwan/aws//modules/policy-deployment"
-  version = "~> 4.0"
-
-  core_network_id = module.fabric.core_network_id
-  policy_document = local.policy_document
-  timeouts        = { update = "1h30m" }
-}
-
-module "share" {
-  source  = "aws-ia/cloudwan/aws//modules/core-network-share"
-  version = "~> 4.0"
-
-  providers      = { aws = aws.ram }
-  resource_share = { name = "compact-core-network" }
-  resources      = { core = module.fabric.core_network_arn }
-  principals     = { application = "123456789012" }
-}
-
-output "fabric_handle" {
-  value = module.fabric.fabric_handle
-}
-
-output "policy_document_sha256" {
-  value = module.policy_deployment.policy_document_sha256
-}
-
-output "resource_share_arn" {
-  value = module.share.resource_share_arn
-}
 ```
 
-## Output stability
+The `create` selector at each fabric boundary must be known during planning;
+resource IDs may be computed. Creating a Global Network while referencing a Core
+Network is invalid because the referenced Core Network must already belong to an
+existing Global Network.
 
-Scalar IDs/ARNs, Core Network state, edges by Region, segments by name, and the
-versioned `fabric_handle` are semver-protected composition contracts.
-`fabric_handle.schema_version` is `cloudwan-fabric-handle/v1` and prevents callers
-from accidentally pairing IDs and ARNs from different fabrics. Provider-shaped
-resource objects are intentionally not exposed.
+## Documentation
 
-`core_network_state` is the value from the last provider refresh, not continuous
-health and not policy deployment evidence.
+- [Upgrade guide 4.0](UPGRADE-GUIDE-4.0.md) — non-destructive migration from v3,
+  first-hop plan allowlisting, cross-state handoff, and rollback.
+- [`policy-deployment`](modules/policy-deployment) — policy digest approval,
+  update timeouts, LIVE verification, and recovery after indeterminate results.
+- [`core-network-share`](modules/core-network-share) — RAM Region and partition
+  constraints, principal forms, stable association keys, and lifecycle safety.
 
 ## Examples
 
-| Example | Demonstrates |
-|---|---|
-| [`basic`](examples/basic) | Fabric plus policy deployment in one state. |
-| [`reference_core_network`](examples/reference\_core\_network) | ID-only reference mode with resolved topology. |
-| [`core_network_share`](examples/core\_network\_share) | RAM sharing through the role alias `aws.ram`. |
-| [`stack_compact`](examples/stack\_compact) | Direct compact composition with optional sharing and a compound timeout. |
+| Example | What it demonstrates | Choose it when | External prerequisites and cost |
+|---|---|---|---|
+| [`basic`](examples/basic) | One created fabric and continuous policy deployment. | You need the smallest complete fabric-plus-policy composition. | Creates a Global Network, Core Network, one edge, and policy deployment. |
+| [`reference_core_network`](examples/reference\_core\_network) | ID-only fabric reference with resolved topology outputs. | Another state owns the Global Network and Core Network. | Requires real related IDs for an AWS plan; creates no Network Manager resources. |
+| [`core_network_share`](examples/core\_network\_share) | Core Network sharing through a role-named `aws.ram` provider. | Accounts or AWS Organizations principals need access to the Core Network. | RAM runs in commercial `us-east-1`; association acceptance depends on principal type and Organizations integration. |
+| [`stack_compact`](examples/stack\_compact) | Fabric, policy, and optional sharing in one state. | One team owns the complete lifecycle and wants one plan. | Creates the selected fabric, policy, and optional RAM resources. |
 
-All examples are ordinary Terraform configurations. Review resource ownership
-and costs before apply. Tests use mocked providers; no test contacts AWS.
+Examples are ordinary Terraform configurations. Their native tests use mocked
+providers and do not contact AWS; replace placeholder IDs, account numbers, and
+principal ARNs before a real plan.
+
+## Operational boundaries
+
+- **Base policy versus deployed policy:** `core_network.base_policy` is consumed
+  only when the Core Network is created. Use `modules/policy-deployment` for
+  subsequent policy changes.
+- **LIVE versus LATEST:** a successful policy resource operation is not evidence
+  that the submitted document is LIVE. Verify the LIVE alias, expected digest,
+  successful execution, and change events through the AWS API.
+- **Reference mode:** referenced fabric and share resources retain their external
+  lifecycle owner; this module resolves normalized outputs without adopting them.
+- **Attachment accepters:** destroying
+  `aws_networkmanager_attachment_accepter` calls `DeleteAttachment` and deletes
+  the spoke-owned attachment. Transfer state with
+  `removed { lifecycle { destroy = false } }`, adopt the same attachment ID in
+  the destination, and verify ownership before retiring the old configuration.
+- **Output stability:** scalar IDs and ARNs, topology maps, and
+  `fabric_handle.schema_version = "cloudwan-fabric-handle/v1"` are stable public
+  contracts. `core_network_state` is last-refresh state, not continuous health or
+  policy deployment evidence.
 
 ## Testing
 
+Mock-provider tests require Terraform `>= 1.7` and create no AWS resources.
+
 ```shell
-terraform init -backend=false
 terraform fmt -check -recursive
+terraform init -backend=false
 terraform validate -no-color
 terraform test -no-color
+./scripts/check-content.sh
 ```
 
-Reusable modules declare only `aws >= 6.59`. CI tests the minimum supported
-provider and the current latest provider; executable applications should commit
-their dependency lock file and may apply a temporary upper bound when needed.
+Reusable modules require AWS provider `>= 6.59`. Executable root configurations
+should commit their dependency lock file and apply an upper bound when their
+provider upgrade policy requires one.
+
+---
 
 ## Requirements
 
