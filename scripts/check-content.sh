@@ -16,6 +16,18 @@ grep -Fxq '## Quick start' "$repo_root/.header.md"
 grep -Fq 'source  = "aws-ia/cloudwan/aws"' "$repo_root/.header.md"
 grep -Fq 'version = "~> 4.0"' "$repo_root/.header.md"
 
+required_docs=(
+  docs/fabric.md
+  docs/policy-deployment.md
+  docs/sharing.md
+  docs/composition.md
+  docs/testing.md
+)
+for relative in "${required_docs[@]}"; do
+  [[ -f "$repo_root/$relative" ]] || fail "Missing thematic guide: $relative"
+done
+[[ "$(find "$repo_root/docs" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" == "5" ]] || fail "docs/ must contain exactly five thematic Markdown guides"
+
 if git -C "$repo_root" grep -niEI 'mermaid|analysis/|RFC|tanda|LDA' -- '*.md' ':(exclude)CHANGELOG.md'; then
   fail "Forbidden diagram or process vocabulary found in published Markdown"
 fi
