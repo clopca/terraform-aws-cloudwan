@@ -99,6 +99,8 @@ existing Global Network.
 | [`reference_core_network`](examples/reference\_core\_network) | ID-only fabric reference with resolved topology outputs. | Another state owns the Global Network and Core Network. | Requires real related IDs for an AWS plan; creates no Network Manager resources. |
 | [`core_network_share`](examples/core\_network\_share) | Core Network sharing through a role-named `aws.ram` provider. | Accounts or AWS Organizations principals need access to the Core Network. | RAM runs in commercial `us-east-1`; association acceptance depends on principal type and Organizations integration. |
 | [`stack_compact`](examples/stack\_compact) | Fabric, policy, and optional sharing in one state. | One team owns the complete lifecycle and wants one plan. | Creates the selected fabric, policy, and optional RAM resources. |
+| [`policy_2025_11`](examples/policy\_2025\_11) | Official provider document generation with routing policies and service insertion. | You need the Cloud WAN `2025.11` policy surface in typed HCL. | Requires provider support for `2025.11`; creates a two-edge fabric and policy deployment. |
+| [`cross_account_sharing`](examples/cross\_account\_sharing) | Organization and OU sharing with external principals disabled. | AWS Organizations defines the consumer boundary. | Requires RAM sharing with Organizations; creates a two-edge fabric, share, and associations. |
 
 Examples are ordinary Terraform configurations. Their native tests use mocked
 providers and do not contact AWS; replace placeholder IDs, account numbers, and

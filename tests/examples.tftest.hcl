@@ -6,6 +6,19 @@ mock_provider "aws" {
   mock_data "aws_region" {
     defaults = { region = "us-west-2" }
   }
+  mock_data "aws_networkmanager_core_network_policy_document" {
+    defaults = {
+      id = "policy-2025-11"
+      json = jsonencode({
+        version = "2025.11"
+        "core-network-configuration" = {
+          "asn-ranges"     = ["64512-64520"]
+          "edge-locations" = [{ location = "us-west-2" }, { location = "us-east-1" }]
+        }
+        segments = [{ name = "application" }, { name = "sharedservices" }]
+      })
+    }
+  }
   mock_data "aws_networkmanager_global_network" {
     defaults = {
       id  = "global-network-11111111111111111"
@@ -120,5 +133,31 @@ run "stack_with_sharing" {
       toset(keys(output.principal_association_ids)) == toset(["application"])
     )
     error_message = "The compact example must propagate the fabric ARN and preserve resource/principal association keys."
+  }
+}
+
+run "example_policy_2025_11" {
+  command = plan
+  module { source = "./examples/policy_2025_11" }
+
+  assert {
+    condition = (
+      output.policy_version == "2025.11" &&
+      length(output.policy_document_sha256) == 64
+    )
+    error_message = "The 2025.11 example must render the new policy version and expose its exact digest."
+  }
+}
+
+run "example_cross_account_sharing" {
+  command = plan
+  module { source = "./examples/cross_account_sharing" }
+
+  assert {
+    condition = (
+      output.resource_share_arn == "arn:aws:ram:us-east-1:123456789012:resource-share/11111111-1111-1111-1111-111111111111" &&
+      toset(keys(output.principal_association_ids)) == toset(["organization", "application-ou"])
+    )
+    error_message = "The cross-account example must preserve Organization and OU principal keys through the RAM role provider."
   }
 }

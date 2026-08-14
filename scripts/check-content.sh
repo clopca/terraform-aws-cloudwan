@@ -28,6 +28,27 @@ for relative in "${required_docs[@]}"; do
 done
 [[ "$(find "$repo_root/docs" -maxdepth 1 -type f -name '*.md' | wc -l | tr -d ' ')" == "5" ]] || fail "docs/ must contain exactly five thematic Markdown guides"
 
+required_examples=(
+  basic
+  reference_core_network
+  core_network_share
+  stack_compact
+  policy_2025_11
+  cross_account_sharing
+)
+for example in "${required_examples[@]}"; do
+  for required in main.tf providers.tf outputs.tf README.md; do
+    [[ -f "$repo_root/examples/$example/$required" ]] || fail "$example missing $required"
+  done
+  guide="$repo_root/examples/$example/README.md"
+  grep -Fxq '## What this demonstrates' "$guide"
+  grep -Fxq '## Relevant configuration' "$guide"
+  grep -Fxq '## Prerequisites and cost' "$guide"
+  grep -Fxq '## Run' "$guide"
+  grep -Fq '(./main.tf)' "$guide"
+done
+[[ "$(find "$repo_root/examples" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" == "6" ]] || fail "examples/ must contain exactly six published scenarios"
+
 if git -C "$repo_root" grep -niEI 'mermaid|analysis/|RFC|tanda|LDA' -- '*.md' ':(exclude)CHANGELOG.md'; then
   fail "Forbidden diagram or process vocabulary found in published Markdown"
 fi
