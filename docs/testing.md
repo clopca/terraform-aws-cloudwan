@@ -9,11 +9,11 @@ Run the same checks required by CI:
 
 ```shell
 terraform fmt -check -recursive
-terraform init -backend=false -lockfile=readonly
+terraform init -backend=false
 terraform validate -no-color
 
 for directory in modules/* examples/*; do
-  terraform -chdir="$directory" init -backend=false -lockfile=readonly
+  terraform -chdir="$directory" init -backend=false
   terraform -chdir="$directory" validate -no-color
 done
 
